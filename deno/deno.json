@@ -1,0 +1,16 @@
+{
+  "deploy": {
+    "project": "c62b42ab-5ba0-442e-8ba2-9caff9733e21",
+    "exclude": [
+      "**/node_modules"
+    ],
+    "include": [],
+    "entrypoint": "bodhi_data_getter.tsx"
+  },
+  "imports": {
+    "@deno/gfm": "jsr:@deno/gfm@^0.9.0"
+  },
+  "tasks": {
+    "start": "deno run --allow-net --allow-env sdk.tsx"
+  }
+}
