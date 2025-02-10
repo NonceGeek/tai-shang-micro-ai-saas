@@ -87,8 +87,63 @@ router
             return;
         }
 
-        const solution = "Here is a link that we found from the Sui Repo: https://github.com/MystenLabs/sui/tree/main/examples/tic-tac-toe";
-        
+        // Get API key from environment variable
+        const apiKey = Deno.env.get("ATOMA_API_KEY");
+        if (!apiKey) {
+            context.response.status = 500;
+            context.response.body = { error: "ATOMA_API_KEY not found in environment variables" };
+            return;
+        }
+
+        // Call Atoma API
+        const atomaResponse = await fetch("https://api.atoma.network/v1/chat/completions", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${apiKey}`
+            },
+            body: JSON.stringify({
+                stream: false, // Changed to false for simpler handling
+                // optional model: "meta-llama/Llama-3.3-70B-Instruct"
+                model: "deepseek-ai/DeepSeek-R1",
+                messages: [{
+                    role: "user",
+                    content: task.prompt // Use the task description as the prompt
+                }],
+                max_tokens: 128
+            })
+        });
+
+        if (!atomaResponse.ok) {
+            context.response.status = 500;
+            context.response.body = { error: "Failed to get response from Atoma API" };
+            return;
+        }
+
+        const atomaResult = await atomaResponse.json();
+
+        // Response format: https://docs.atoma.network/cloud-api-reference/chat/create-chat-completion
+        //         {
+        // "choices": [
+        //     {
+        //       "finish_reason": "stop",
+        //       "index": 0,
+        //       "logprobs": "<any>",
+        //       "message": {
+        //         "content": "Hello! How can you help me today?",
+        //         "name": "john_doe",
+        //         "role": "user"
+        //       }
+        //     }
+        //   ],
+        //   "created": 1677652288,
+        //   "id": "chatcmpl-123",
+        //   "model": "meta-llama/Llama-3.3-70B-Instruct",
+        //   "system_fingerprint": "fp_44709d6fcb",
+        //   "usage": null
+        // }
+        const solution = atomaResult.choices[0].message.content;
+        console.log(solution);
         // Read the agent info from the file
         let agentData;
         try {
@@ -120,7 +175,6 @@ router
             return;
         }
 
-        const submitResult = await submitResponse.json();
         context.response.status = 200;
         context.response.body = { 
             message: "LLM response generated and solution submitted successfully"
