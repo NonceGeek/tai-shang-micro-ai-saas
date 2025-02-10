@@ -10,6 +10,75 @@ console.log("Hello from AI SaaSSDK!");
 const router = new Router();
 
 router
+    .get("/", async (context) => {
+        context.response.body = "Hello from AI SaaSSDK!";
+    })
+    .get("/agents", async (context) => {
+        const supabase = createClient(
+            Deno.env.get("SUPABASE_URL") ?? "",
+            Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+            // To implement row-level security (RLS), uncomment and adjust the following lines:
+            // , {
+            //   global: {
+            //     headers: { Authorization: `Bearer ${context.request.headers.get('Authorization')}` }
+            //   }
+            // }
+          );
+      
+          let { data: agents, error } = await supabase
+            .from("micro_ai_saas_agents")
+            .select("*")
+      
+          if (error) {
+            context.response.status = 500;
+            context.response.body = { error: error.message };
+            return;
+          }
+      
+          context.response.body = agents;
+    })
+    .post("/add_agent", async (context) => {
+        const supabase = createClient(
+            Deno.env.get("SUPABASE_URL") ?? "",
+            Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+        );
+
+        // Parse the request body
+        let payload = await context.request.body.text();
+        const { addr, owner_addr, type, chat_url, source_url } = JSON.parse(payload);
+
+        // Validate required fields
+        if (!addr || !owner_addr || !type) {
+            context.response.status = 400;
+            context.response.body = {
+                error: "Missing required fields: addr, owner_addr, and type are required"
+            };
+            return;
+        }
+
+        // Insert new agent
+        const { data, error } = await supabase
+            .from("micro_ai_saas_agents")
+            .insert([
+                {
+                    addr,
+                    owner_addr,
+                    type,
+                    ...(chat_url && { chat_url }),
+                    ...(source_url && { source_url })
+                }
+            ])
+            .select();
+
+        if (error) {
+            context.response.status = 500;
+            context.response.body = { error: error.message };
+            return;
+        }
+
+        context.response.status = 201;
+        context.response.body = data;
+    })
   .get("/task_unsolved", async (context) => {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
