@@ -13,11 +13,28 @@ const router = new Router();
 const txs = [];
 
 const agent_info = {
-    addr: "",
-    owner_addr: "",
-    type: "",
+    addr: "0xac79f707686c2f0d924930dce530c1577fdb69404172e459d1d437e96306de3f",
+    owner_addr: "0x603142bcc9864820e87be3176403e48208705808b05743bd61dacba2c8b28070",
+    type: "img",
     chat_url: "",
-    source_url: ""
+    source_url: "https://github.com/NonceGeek/tai-shang-micro-ai-saas/blob/main/agents/img_agent.tsx"
+}
+
+// Function to save data as text file
+async function saveAsTextFile(fileName: string, data: string): Promise<void> {
+  // const payload = await Deno.readFile("./9bfdbf2c-dd87-4028-bb96-4a17f1ecd038.txt");
+  // // Convert buffer to string using TextDecoder
+  // const payloadString = new TextDecoder().decode(payload);
+    const encoder = new TextEncoder();
+    const textData = encoder.encode(data);
+    await Deno.writeFile(fileName, textData);
+}
+
+async function saveAsImageFile(fileName: string, data: string): Promise<void> {
+  const image_data = data.split(',')[1];
+  // Convert base64 to Uint8Array
+  const binary_data = new Uint8Array(atob(image_data).split('').map(char => char.charCodeAt(0)));
+  await Deno.writeFile(fileName, binary_data);
 }
 
 router
@@ -25,51 +42,16 @@ router
         context.response.body = "Hello from img_agent!";
     })
     .get("/register", async (context) => {
-        // TODO: register agent to the system before start working.
-    })
-    .get("/solve_task", async (context) => {
-        // TODO: solve task from the system.
-
-        // curl -X POST https://api.tokentapestry.com/text2img \
-        // -H "Content-Type: application/json" \
-        // -d '{
-        //   "prompt": "dog",
-        //   "chain": "sui",
-        //   "network": "testnet",
-        //   "tx": "your_transaction_hash_here"
-        // }'
-    })
-    .post("/add_agent", async (context) => {
+        // HINT: DO NOT DELETE THIS COMMENT, register agent to the system before start working.
         const supabase = createClient(
             Deno.env.get("SUPABASE_URL") ?? "",
             Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
         );
 
-        // Parse the request body
-        let payload = await context.request.body.text();
-        const { addr, owner_addr, type, chat_url, source_url } = JSON.parse(payload);
-
-        // Validate required fields
-        if (!addr || !owner_addr || !type) {
-            context.response.status = 400;
-            context.response.body = {
-                error: "Missing required fields: addr, owner_addr, and type are required"
-            };
-            return;
-        }
-
-        // Insert new agent
+        // Use the predefined agent_info to register
         const { data, error } = await supabase
             .from("micro_ai_saas_agents")
-            .insert([
-                {
-                    addr,
-                    owner_addr,
-                    type,
-                    ...(chat_url && { chat_url }),
-                    ...(source_url && { source_url })
-                }
-            ])
+            .insert([agent_info])
             .select();
 
         if (error) {
@@ -81,177 +63,99 @@ router
         context.response.status = 201;
         context.response.body = data;
     })
-  .get("/task_unsolved", async (context) => {
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-      // To implement row-level security (RLS), uncomment and adjust the following lines:
-      // , {
-      //   global: {
-      //     headers: { Authorization: `Bearer ${context.request.headers.get('Authorization')}` }
-      //   }
-      // }
-    );
+    .get("/solve_task", async (context) => {
+        // TODO: solve task from the system.
+        const queryParams = context.request.url.searchParams;
+        const task_id = queryParams.get("task_id");
+        // Here is the api, get task from the system.
+        // curl https://ai-saas.deno.dev/task\?unique_id\=9bfdbf2c-dd87-4028-bb96-4a17f1ecd038
+        // [{"id":1,"user":"0x01","prompt":"generate a pic about cat girl","task_type":"img","solution":"This is the solution to the task","solver":"d064239b-c67a-4107-b8b9-de6118472d51","fee":10,"fee_unit":"ldg","tx":"","created_at":"2025-02-08T12:22:06.605268+00:00","solved_at":"2025-02-08T13:37:04.213","signature":null,"unique_id":"9bfdbf2c-dd87-4028-bb96-4a17f1ecd038"}]
+        
+        // Fetch task from the system
+        const taskResponse = await fetch(`https://ai-saas.deno.dev/task?unique_id=${task_id}`);
+        if (!taskResponse.ok) {
+            context.response.status = 500;
+            context.response.body = { error: "Failed to fetch task" };
+            return;
+        }
+        
+        const tasks = await taskResponse.json();
+        if (!tasks || tasks.length === 0) {
+            context.response.status = 404;
+            context.response.body = { error: "Task not found" };
+            return;
+        }
+        
+        const task = tasks[0];
+        
+        // Check if task already has a solution
+        if (task.solution && task.solution !== "") {
+            context.response.status = 400;
+            context.response.body = { error: "This task has already been solved" };
+            return;
+        }
 
-    let { data: micro_ai_saas, error } = await supabase
-      .from("micro_ai_saas")
-      .select("*")
-      .or("solution.is.null,solution.eq.");
+        // curl -X POST https://api.tokentapestry.com/text2img \
+        // -H "Content-Type: application/json" \
+        // -d '{
+        //   "prompt": "dog",
+        //   "chain": "sui",
+        //   "network": "testnet",
+        //   "tx": "your_transaction_hash_here"
+        // }'
+        const tokenTapestryResponse = await fetch("https://api.tokentapestry.com/text2img", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                prompt: task.prompt,
+                chain: "sui",
+                network: "testnet",
+                tx: "5eei1FYHvtp1sSA7Ukk3FTcsTTar8V4o29DM4qSRV1hq" // need a tx to transfer more than 0.003 usdc to 0x6b747322a55ff2e3525ed6810efa1b19fbe5d984bfae8afe12b10da65154b446 and has not been used. 
+            })
+        });
 
-    if (error) {
-      context.response.status = 500;
-      context.response.body = { error: error.message };
-      return;
-    }
+        if (!tokenTapestryResponse.ok) {
+            context.response.status = 500;
+            context.response.body = { error: "Failed to generate image" };
+            return;
+        }
 
-    context.response.body = micro_ai_saas;
-  })
-  .get("/my_task", async (context) => {
-    const queryParams = context.request.url.searchParams;
-    const addr = queryParams.get("addr");
-    console.log(addr);
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-    );
+        // The response is a json, the image url is in the response.
+        const payload = await tokenTapestryResponse.json();  
 
-    let { data: micro_ai_saas, error } = await supabase
-      .from("micro_ai_saas")
-      .select("*")
-      .eq("user", addr);
+        const image = payload.image;
+        const image_name = `./${task_id}.png`;
+        
+        // Use the new function to save the file
+        await saveAsImageFile(image_name, image);
+        
+        // Submit the solution to the system
+        const submitResponse = await fetch("https://ai-saas.deno.dev/submit_solution", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                unique_id: task_id,
+                solution: image,  // Send the base64 image data as the solution
+                solver: agent_info.addr,
+                solver_type: ["SD"]
+            })
+        });
 
-    if (error) {
-      context.response.status = 500;
-      context.response.body = { error: error.message };
-      return;
-    }
+        if (!submitResponse.ok) {
+            context.response.status = 500;
+            context.response.body = { error: "Failed to submit solution" };
+            return;
+        }
 
-    context.response.body = micro_ai_saas;
-  })
-  .post("/add_task", async (context) => {
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-    );
-
-    // Parse the request body
-    let payload = await context.request.body.text();
-    const { user, prompt, task_type, fee, fee_unit } = JSON.parse(payload);
-
-    // Validate required fields
-    if (!user || !prompt || !task_type) {
-      context.response.status = 400;
-      context.response.body = {
-        error:
-          "Missing required fields: user, prompt, and task_type are required",
-      };
-      return;
-    }
-
-    // Insert new task
-    const { data, error } = await supabase
-      .from("micro_ai_saas")
-      .insert([
-        {
-          user,
-          prompt,
-          task_type,
-          ...(fee && { fee }),
-          ...(fee_unit && { fee_unit }),
-        },
-      ])
-      .select();
-
-    if (error) {
-      context.response.status = 500;
-      context.response.body = { error: error.message };
-      return;
-    }
-
-    context.response.status = 201;
-    context.response.body = data;
-  })
-  .get("/task_solved", async (context) => {
-    const queryParams = context.request.url.searchParams;
-    const unique_id = queryParams.get("unique_id");
-    console.log(unique_id);
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-    );
-
-    let { data: micro_ai_saas, error } = await supabase
-      .from("micro_ai_saas")
-      .select("*")
-      .match({ unique_id })
-      .or('solution.is.null,solution.eq.')
-
-    if (error) {
-      context.response.status = 500;
-      context.response.body = { error: error.message };
-      return;
-    }
-
-    context.response.body = micro_ai_saas;
-  })
-  .post("/submit_solution", async (context) => {
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-    );
-
-    // Parse the request body
-    let payload = await context.request.body.text();
-    const { unique_id, solution, solver } = JSON.parse(payload);
-
-    // Validate required fields
-    if (!unique_id || !solution || !solver) {
-      context.response.status = 400;
-      context.response.body = {
-        error: "Missing required fields: unique_id, solution, and solver are required"
-      };
-      return;
-    }
-
-    let { data: micro_ai_saas, error: selectError } = await supabase
-        .from("micro_ai_saas")
-        .select("*")
-        .match({ unique_id })
-        .or('solution.is.null,solution.eq.')
-
-    // Check if task exists and has no solution
-    if (!micro_ai_saas || micro_ai_saas.length === 0) {
-      context.response.status = 400;
-      context.response.body = { error: "Task not found or solution already exists" };
-      return;
-    }
-
-    // Update task
-    const { data, error } = await supabase
-      .from("micro_ai_saas")
-      .update({ 
-        solution,
-        solver,
-        solved_at: new Date().toISOString()
-      })
-      .match({ unique_id })
-      .select();
-
-    if (error) {
-      context.response.status = 500;
-      context.response.body = { error: error.message };
-      return;
-    }
-
-    context.response.status = 200;
-    context.response.body = data;
-  })
-  .post("/approve_solution", async (context) => {
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-    );
-  });
+        const submitResult = await submitResponse.json();
+        context.response.status = 200;
+        context.response.body = { 
+            message: "Image generated and solution submitted successfully"        };
+    })
 
 const app = new Application();
 app.use(oakCors()); // Enable CORS for All Routes
