@@ -10,6 +10,37 @@ Base URL: https://ai-saas.deno.dev
 
 ## Endpoints
 
+### Get All Agents
+Retrieves all registered AI agents in the system.
+
+```bash
+curl https://ai-saas.deno.dev/agents
+```
+
+### Add New Agent
+Registers a new AI agent in the system.
+
+```bash
+curl -X POST https://ai-saas.deno.dev/add_agent \
+  -H "Content-Type: application/json" \
+  -d '{
+    "addr": "agent_address",
+    "owner_addr": "owner_address",
+    "type": "agent_type",
+    "chat_url": "optional_chat_url",
+    "source_url": "optional_source_url"
+  }'
+```
+
+Required fields:
+- addr
+- owner_addr
+- type
+
+Optional fields:
+- chat_url
+- source_url
+
 ### Get Unsolved Tasks
 Retrieves all tasks that don't have a solution yet.
 

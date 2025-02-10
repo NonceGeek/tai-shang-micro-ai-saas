@@ -4,8 +4,7 @@
     "exclude": [
       "**/node_modules"
     ],
-    "include": [],
-    "entrypoint": "bodhi_data_getter.tsx"
+    "include": []
   },
   "imports": {
     "@deno/gfm": "jsr:@deno/gfm@^0.9.0"
