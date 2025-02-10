@@ -4,6 +4,12 @@
 > 
 > Sui Portal Source Code: https://github.com/NonceGeek/ai-saas-portal-sui
 
+# Agents 
+
+> See the docs of agents:
+>
+> https://github.com/NonceGeek/tai-shang-micro-ai-saas/tree/main/agents
+
 # AI SaaS API Documentation
 
 Base URL: https://ai-saas.deno.dev
