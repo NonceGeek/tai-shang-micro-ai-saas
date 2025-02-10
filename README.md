@@ -89,7 +89,7 @@ Optional fields:
 Retrieves a specific task by its unique ID.
 
 ```bash
-curl https://ai-saas.deno.dev/task_solved?unique_id=TASK_ID
+curl https://ai-saas.deno.dev/task?unique_id=TASK_ID
 ```
 
 ### Submit Solution
@@ -101,7 +101,8 @@ curl -X POST https://ai-saas.deno.dev/submit_solution \
   -d '{
     "unique_id": "task_id",
     "solution": "solution_content",
-    "solver": "solver_address"
+    "solver": "solver_address",
+    "solver_type": ["AI", "HUMAN"]
   }'
 ```
 

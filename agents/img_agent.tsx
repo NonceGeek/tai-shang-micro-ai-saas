@@ -17,7 +17,8 @@ const agent_info = {
     owner_addr: "0x603142bcc9864820e87be3176403e48208705808b05743bd61dacba2c8b28070",
     type: "img",
     chat_url: "",
-    source_url: "https://github.com/NonceGeek/tai-shang-micro-ai-saas/blob/main/agents/img_agent.tsx"
+    source_url: "https://github.com/NonceGeek/tai-shang-micro-ai-saas/blob/main/agents/img_agent.tsx",
+    description: "This is an image generation agent based on Stable Diffusion."
 }
 
 // Function to save data as text file
@@ -37,31 +38,50 @@ async function saveAsImageFile(fileName: string, data: string): Promise<void> {
   await Deno.writeFile(fileName, binary_data);
 }
 
+async function readTextFile(fileName: string): Promise<string> {
+    const data = await Deno.readFile(fileName);
+    return new TextDecoder().decode(data);
+}
+
 router
     .get("/", async (context) => {
         context.response.body = "Hello from img_agent!";
     })
     .get("/register", async (context) => {
-        // HINT: DO NOT DELETE THIS COMMENT, register agent to the system before start working.
-        const supabase = createClient(
-            Deno.env.get("SUPABASE_URL") ?? "",
-            Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-        );
+        // Register agent to the system before start working
+        const registerResponse = await fetch("https://ai-saas.deno.dev/add_agent", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                addr: agent_info.addr,
+                owner_addr: agent_info.owner_addr,
+                type: agent_info.type,
+                chat_url: agent_info.chat_url,
+                source_url: agent_info.source_url,
+                description: agent_info.description
+            })
+        });
 
-        // Use the predefined agent_info to register
-        const { data, error } = await supabase
-            .from("micro_ai_saas_agents")
-            .insert([agent_info])
-            .select();
-
-        if (error) {
+        if (!registerResponse.ok) {
             context.response.status = 500;
-            context.response.body = { error: error.message };
+            context.response.body = { error: "Failed to register agent" };
             return;
         }
 
-        context.response.status = 201;
-        context.response.body = data;
+        const result = await registerResponse.json();
+        // Save the first result object to a file named with its unique_id
+        if (result && result.length > 0) {
+            const fileName = `./img_agent.txt`;
+            await saveAsTextFile(fileName, JSON.stringify(result[0], null, 2));
+        }
+
+        context.response.status = 200;
+        context.response.body = { 
+            message: "Agent registered successfully",
+            data: result
+        };
     })
     .get("/solve_task", async (context) => {
         // TODO: solve task from the system.
@@ -112,7 +132,7 @@ router
                 prompt: task.prompt,
                 chain: "sui",
                 network: "testnet",
-                tx: "5eei1FYHvtp1sSA7Ukk3FTcsTTar8V4o29DM4qSRV1hq" // need a tx to transfer more than 0.003 usdc to 0x6b747322a55ff2e3525ed6810efa1b19fbe5d984bfae8afe12b10da65154b446 and has not been used. 
+                tx: "A5CfjvPpSkdiCMz6v3ofNjPvK8RcViAUF2JsqDJb2dqn" // need a tx to transfer more than 0.003 usdc to 0x6b747322a55ff2e3525ed6810efa1b19fbe5d984bfae8afe12b10da65154b446 and has not been used. 
             })
         });
 
@@ -131,6 +151,17 @@ router
         // Use the new function to save the file
         await saveAsImageFile(image_name, image);
         
+        // Read the agent info from the file
+        let agentData;
+        try {
+            const fileContent = await readTextFile("./img_agent.txt");
+            agentData = JSON.parse(fileContent);
+        } catch (error) {
+            context.response.status = 500;
+            context.response.body = { error: "Failed to read agent data" };
+            return;
+        }
+
         // Submit the solution to the system
         const submitResponse = await fetch("https://ai-saas.deno.dev/submit_solution", {
             method: "POST",
@@ -139,8 +170,8 @@ router
             },
             body: JSON.stringify({
                 unique_id: task_id,
-                solution: image,  // Send the base64 image data as the solution
-                solver: agent_info.addr,
+                solution: image,
+                solver: agentData.unique_id,  // Use the unique_id from the file instead of agent_info.addr
                 solver_type: ["SD"]
             })
         });

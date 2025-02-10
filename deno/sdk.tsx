@@ -45,7 +45,7 @@ router
 
         // Parse the request body
         let payload = await context.request.body.text();
-        const { addr, owner_addr, type, chat_url, source_url } = JSON.parse(payload);
+        const { addr, owner_addr, type, chat_url, source_url, description } = JSON.parse(payload);
 
         // Validate required fields
         if (!addr || !owner_addr || !type) {
@@ -64,6 +64,7 @@ router
                     addr,
                     owner_addr,
                     type,
+                    description,
                     ...(chat_url && { chat_url }),
                     ...(source_url && { source_url })
                 }
@@ -78,6 +79,24 @@ router
 
         context.response.status = 201;
         context.response.body = data;
+    })
+    .get("/tasks", async (context) => {
+        const supabase = createClient(
+            Deno.env.get("SUPABASE_URL") ?? "",
+            Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+        );
+
+        let { data: tasks, error } = await supabase
+            .from("micro_ai_saas")
+            .select("*")
+
+        if (error) {
+            context.response.status = 500;
+            context.response.body = { error: error.message };
+            return;
+        }
+
+        context.response.body = tasks;
     })
   .get("/task_unsolved", async (context) => {
     const supabase = createClient(
@@ -169,7 +188,7 @@ router
     context.response.status = 201;
     context.response.body = data;
   })
-  .get("/task_solved", async (context) => {
+  .get("/task", async (context) => {
     const queryParams = context.request.url.searchParams;
     const unique_id = queryParams.get("unique_id");
     console.log(unique_id);
@@ -182,7 +201,7 @@ router
       .from("micro_ai_saas")
       .select("*")
       .match({ unique_id })
-      .or('solution.is.null,solution.eq.')
+    //   .or('solution.is.null,solution.eq.')
 
     if (error) {
       context.response.status = 500;
@@ -200,7 +219,8 @@ router
 
     // Parse the request body
     let payload = await context.request.body.text();
-    const { unique_id, solution, solver } = JSON.parse(payload);
+    const { unique_id, solution, solver, solver_type } = JSON.parse(payload);
+    // solver_type is an array of strings representing the types of solvers
 
     // Validate required fields
     if (!unique_id || !solution || !solver) {
@@ -230,6 +250,7 @@ router
       .update({ 
         solution,
         solver,
+        ...(solver_type && { solver_type }),
         solved_at: new Date().toISOString()
       })
       .match({ unique_id })
