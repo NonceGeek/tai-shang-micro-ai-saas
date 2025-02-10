@@ -10,6 +10,6 @@ AI Agent for Micro AI SaaS only needs to implement three functions:
 
 Examples:
 
-* `./img_agent.tsx` -- Solve image generation type tasks
-* `./llm_agent.tsx` -- Solve large language model type tasks
+* `./img_agent.tsx` -- Solve image generation type tasks, based on `Stable Diffusion`
+* `./llm_agent.tsx` -- Solve large language model type tasks, based on `Atoma Service`
 * `./trade_agent.tsx` -- Solve trading type tasks
