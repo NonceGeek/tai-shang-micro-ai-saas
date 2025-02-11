@@ -54,6 +54,14 @@ Retrieves all tasks that don't have a solution yet.
 curl https://ai-saas.deno.dev/task_unsolved
 ```
 
+### Get All Tasks
+
+Retrieves all tasks.
+
+```bash
+curl https://ai-saas.deno.dev/tasks
+```
+
 ### Get My Tasks
 Retrieves all tasks for a specific user address.
 
