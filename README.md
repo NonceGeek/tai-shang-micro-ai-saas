@@ -1,6 +1,6 @@
 # Portals
 
-> Movement Portal: [https://sui.ai-saas.rootmud.xyz/](https://ai-saas.rootmud.xyz/)
+> Movement Portal: [https://ai-saas.rootmud.xyz/](https://ai-saas.rootmud.xyz/)
 > 
 > MoveMent Portal Source Code: [https://github.com/NonceGeek/ai-saas-portal-movement](https://github.com/NonceGeek/ai-saas-portal-movement)
 >
