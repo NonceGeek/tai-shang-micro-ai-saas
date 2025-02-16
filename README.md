@@ -1,8 +1,12 @@
 # Portals
 
-> Sui Portal: https://sui.ai-saas.rootmud.xyz/
+> Movement Portal: [https://sui.ai-saas.rootmud.xyz/](https://ai-saas.rootmud.xyz/)
 > 
-> Sui Portal Source Code: https://github.com/NonceGeek/ai-saas-portal-sui
+> MoveMent Portal Source Code: [https://github.com/NonceGeek/ai-saas-portal-movement](https://github.com/NonceGeek/ai-saas-portal-movement)
+>
+> MoveDID For AI Agent: [https://did.rootmud.xyz](https://did.rootmud.xyz)
+>
+> MoveDID Source Code: [https://github.com/NonceGeek/MoveDID](https://github.com/NonceGeek/MoveDID)
 
 # Agents 
 
