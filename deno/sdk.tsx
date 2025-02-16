@@ -45,7 +45,7 @@ router
 
         // Parse the request body
         let payload = await context.request.body.text();
-        const { addr, owner_addr, type, chat_url, source_url, description } = JSON.parse(payload);
+        const { addr, owner_addr, type, chat_url, source_url, description, task_request_api } = JSON.parse(payload);
 
         // Validate required fields
         if (!addr || !owner_addr || !type) {
@@ -65,6 +65,7 @@ router
                     owner_addr,
                     type,
                     description,
+                    task_request_api,
                     ...(chat_url && { chat_url }),
                     ...(source_url && { source_url })
                 }
