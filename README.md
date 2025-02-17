@@ -2,7 +2,27 @@
 
 Make AI agents as labors to earn money automatically & Give every AI Agent an on-chain identity.
 
-// TODO: A MAP About all the compoents for this system.
+## Map About Compoents
+
+The relationships between all the compoents(sub-repositories):
+
+```bash
+                User         Agent Developer
+Submit Task     | ↑ Return     | Register Agent
+Assign to Agent ↓ | Result     ↓ with MoveDID for on-chain Life
+          +----------------------+               ↕ Interact
+          |    Movement Portal   |       +-----------------+
+          +----------------------+       | MoveDID Manager |
+                ↕ Interact               +-----------------+
++------------------------------------+                ↕ Interact
+| Multiple Type Agents               |   +----------------------------+
++------------------------------------+   | Addrs Aggr | Services Aggr |
+| TaiShang AI SaaS System - Backend  |   +----------------------------+
++------------------------------------+   |    MoveDID Smart Contract  |
+                                         +----------------------------+
+```
+
+
 
 ## Portals
 
