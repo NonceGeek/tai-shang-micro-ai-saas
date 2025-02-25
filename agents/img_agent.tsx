@@ -52,7 +52,7 @@ async function readTextFile(fileName: string): Promise<string> {
 // Function to remove and return a transaction from the stack
 async function shiftTxs(): Promise<string | null> {
   const kv = await Deno.openKv();
-  const existingTxs = await kv.get(["txs", "sui"]);
+  const existingTxs = await kv.get(["txs", "movement"]);
   const txList = existingTxs.value ? JSON.parse(existingTxs.value) : [];
 
   if (txList.length === 0) {
@@ -60,7 +60,7 @@ async function shiftTxs(): Promise<string | null> {
   }
 
   const currentTx = txList.shift();
-  await kv.set(["txs", "sui"], JSON.stringify(txList));
+  await kv.set(["txs", "movement"], JSON.stringify(txList));
   return currentTx;
 }
 
@@ -264,13 +264,13 @@ router
   // })
   .get("/get_txs", async (context) => {
     const kv = await Deno.openKv();
-    const txs = await kv.get(["txs", "sui"]);
+    const txs = await kv.get(["txs", "movement"]);
     context.response.body = { txs: txs.value };
   })
   .get("/clear_txs", async (context) => {
     const kv = await Deno.openKv();
     // TODO: reset the txs stack in KV store.
-    await kv.set(["txs", "sui"], JSON.stringify([]));
+    await kv.set(["txs", "movement"], JSON.stringify([]));
     context.response.body = { message: "Txs stack cleared successfully" };
   })
   .post("/add_txs", async (context) => {
@@ -295,14 +295,14 @@ router
       const kv = await Deno.openKv();
 
       // Get existing txs from KV
-      const existingTxs = await kv.get(["txs", "sui"]);
+      const existingTxs = await kv.get(["txs", "movement"]);
       const txList = existingTxs.value ? JSON.parse(existingTxs.value) : [];
 
       // Add new txs to the list
       txList.push(...txs);
 
       // Store updated list back to KV
-      await kv.set(["txs", "sui"], JSON.stringify(txList));
+      await kv.set(["txs", "movement"], JSON.stringify(txList));
 
       context.response.status = 200;
       context.response.body = {
@@ -332,16 +332,16 @@ router
     const kv = await Deno.openKv();
 
     // Get existing txs from KV
-    const existingTxs = await kv.get(["txs", "sui"]);
+    const existingTxs = await kv.get(["txs", "movement"]);
     const txList = existingTxs.value ? JSON.parse(existingTxs.value) : [];
 
     // Add new tx to the list
     txList.push(tx);
 
     // Store updated list back to KV
-    await kv.set(["txs", "sui"], JSON.stringify(txList));
+    await kv.set(["txs", "movement"], JSON.stringify(txList));
 
-    const updatedExistingTxs = await kv.get(["txs", "sui"]);
+    const updatedExistingTxs = await kv.get(["txs", "movement"]);
     console.log("txList", updatedExistingTxs.value);
 
     context.response.body = {
@@ -434,34 +434,37 @@ router
     //   "network": "testnet",
     //   "tx": ""
     // }'
-    // const tokenTapestryResponse = await fetch(
-    //   "https://api.tokentapestry.com/text2img",
-    //   {
-    //     method: "POST",
-    //     headers: {
-    //       "Content-Type": "application/json",
-    //     },
-    //     body: JSON.stringify({
-    //       prompt: task.prompt,
-    //       chain: "sui",
-    //       network: "testnet",
-    //       tx: "2553FpSSEr2tgYqcczdMiAnd1AFiJsSb2vr5AG3m13BQ",
-    //     }),
-    //   }
-    // );
+    console.log("currentTx", currentTx);
+    console.log("prompt", task.prompt);
+    const tokenTapestryResponse = await fetch(
+      "https://api.tokentapestry.com/text2img",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          prompt: task.prompt,
+          "chain": "movement",
+          "network": "testnet-bardock",
+          "token": "MOVE",
+          tx: currentTx,
+        }),
+      }
+    );
 
-    // console.log("tokenTapestryResponse", tokenTapestryResponse);
+    console.log("tokenTapestryResponse", tokenTapestryResponse);
 
-    // if (!tokenTapestryResponse.ok) {
-    //   context.response.status = 500;
-    //   context.response.body = { error: "Failed to generate image" };
-    //   return;
-    // }
+    if (!tokenTapestryResponse.ok) {
+      context.response.status = 500;
+      context.response.body = { error: "Failed to generate image" };
+      return;
+    }
 
-    // // The response is a json, the image url is in the response.
-    // const payload = await tokenTapestryResponse.json();
-    // const image = payload.image;
-    const image = "https://p.ipic.vip/zcw033.png";
+    // The response is a json, the image url is in the response.
+    const payload = await tokenTapestryResponse.json();
+    const image = payload.image;
+    // const image = "https://p.ipic.vip/zcw033.png";
 
     // const image_name = `./${task_id}.png`;
 

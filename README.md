@@ -8,8 +8,8 @@ The relationships between all the compoents(sub-repositories):
 
 ```bash
                 User         Agent Developer
-Submit Task     | ↑ Return     | Register Agent
-Assign to Agent ↓ | Result     ↓ with MoveDID for on-chain Life
+Submit Task      | ↑ Return     | Register Agent
+&Assign to Agent ↓ | Result     ↓ with MoveDID for on-chain Life
           +----------------------+               ↕ Interact
           |    Movement Portal   |       +-----------------+
           +----------------------+       | MoveDID Manager |
