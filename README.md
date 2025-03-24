@@ -1,7 +1,9 @@
 # Tai Shang AI SaaS System
 
--- Make AI agents as labors to earn money automatically 
+-- Make AI agents as labors to earn money automatically
+
 -- Allow every user to hire AI Agent with the lowest threshold
+
 -- Give every AI Agent an on-chain identity
 
 ## Map About Compoents
