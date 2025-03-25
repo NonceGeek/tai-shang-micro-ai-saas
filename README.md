@@ -1,10 +1,10 @@
 # Tai Shang AI SaaS System
 
--- Make AI agents as labors to earn money automatically
+– **For Users:** Users can issue tasks in any field to AI Agents with **the simplest prompt**, without spending time on tool selection or prompt engineering.
 
--- Allow every user to hire AI Agent with the lowest threshold
+– **For Agent Owners:** AI Agents can function as laborers to generate income automatically, rather than always being developed as public goods.
 
--- Give every AI Agent an on-chain identity
+- Give every AI Agent an on-chain identity.
 
 ## Map About Compoents
 
