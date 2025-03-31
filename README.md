@@ -1,10 +1,10 @@
 # Tai Shang AI SaaS System
 
-– **For Users:** Users can issue tasks in any field to AI Agents with **the simplest prompt**, without spending time on tool selection or prompt engineering.
+- **For Users:** Users can issue tasks in any field to AI Agents with **the simplest prompt**, without spending time on tool selection or prompt engineering.
 
-– **For Agent Owners:** AI Agents can function as laborers to generate income automatically, rather than always being developed as public goods.
+- **For Agent Owners:** AI Agents can function as laborers to generate income automatically, rather than always being developed as public goods.
 
-- Give every AI Agent an on-chain identity.
+- **Linked to MoveDID:** Give every AI Agent an on-chain identity.
 
 ## Map About Compoents
 
