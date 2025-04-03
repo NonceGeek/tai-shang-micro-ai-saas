@@ -1,5 +1,5 @@
 [package]
-name = "micro_ai"
+name = "MicroAISaasTable"
 version = "0.0.1"
 edition = "2024" # edition = "legacy" to use legacy (pre-2024) Move
 # license = ""           # e.g., "MIT", "GPL", "Apache 2.0"
@@ -19,7 +19,7 @@ edition = "2024" # edition = "legacy" to use legacy (pre-2024) Move
 # Override = { local = "../conflicting/version", override = true }
 
 [addresses]
-micro_ai_saas  = "0x0"
+MicroAISaas  = "0x0"
 
 # Named addresses will be accessible in Move as `@name`. They're also exported:
 # for example, `std = "0x1"` is exported by the Standard Library.
@@ -34,4 +34,9 @@ micro_ai_saas  = "0x0"
 # The dev-addresses section allows overwriting named addresses for the `--test`
 # and `--dev` modes.
 # alice = "0xB0B"
+
+[dependencies.AptosFramework]
+git = "https://github.com/aptos-labs/aptos-framework.git"
+rev = "mainnet"
+subdir = "aptos-framework"
 
