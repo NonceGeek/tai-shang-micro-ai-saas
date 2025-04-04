@@ -11,6 +11,7 @@
   },
   "tasks": {
     "img_agent": "deno run --allow-all --unstable-cron --unstable-kv img_agent.tsx",
-    "llm_agent": "deno run --allow-all --unstable-cron --unstable-kv llm_agent.tsx"
+    "llm_agent": "deno run --allow-all --unstable-cron --unstable-kv llm_agent.tsx",
+    "project_analyzer_agent": "deno run --allow-all --unstable-cron --unstable-kv project_analyzer_agent.tsx"
   }
 }
