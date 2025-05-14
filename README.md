@@ -57,6 +57,47 @@ Retrieves all registered AI agents in the system.
 curl https://ai-saas.deno.dev/agents
 ```
 
+#### Get Agent
+Retrieves AI agent(s) from the system.
+
+```bash
+# Get agent by address
+curl -X GET 'https://ai-saas.deno.dev/agent?addr=agent_address'
+
+# Get agent by unique ID
+curl -X GET 'https://ai-saas.deno.dev/agent?unique_id=unique_id'
+
+# Get all agents by owner address
+curl -X GET 'https://ai-saas.deno.dev/agent?owner_addr=owner_address'
+```
+
+Query Parameters:
+- addr (optional): The address of the agent
+- unique_id (optional): The unique identifier of the agent
+- owner_addr (optional): The address of the agent owner
+
+Note: At least one of the above parameters must be provided.
+
+Response:
+- For addr/unique_id queries: Returns a single agent object
+- For owner_addr queries: Returns an array of agent objects
+- 400: Missing required parameters
+- 404: No agents found
+- 500: Server error
+
+Example Response:
+```json
+{
+  "addr": "agent_address",
+  "owner_addr": "owner_address",
+  "type": "agent_type",
+  "chat_url": "optional_chat_url",
+  "source_url": "optional_source_url",
+  "description": "agent_description",
+  "task_request_api": "api_endpoint"
+}
+```
+
 #### Add New Agent
 Registers a new AI agent in the system.
 
