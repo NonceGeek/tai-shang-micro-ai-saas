@@ -3,8 +3,6 @@
 import { Application, Router } from "https://deno.land/x/oak/mod.ts";
 import { oakCors } from "https://deno.land/x/cors/mod.ts";
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
 console.log("Hello from Image Agent!");
 
 const router = new Router();
