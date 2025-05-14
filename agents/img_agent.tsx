@@ -11,6 +11,19 @@ const router = new Router();
 
 type ChainName = "movement" | "solana";
 
+// Helper function to validate chain parameter
+function validateChain(chain: string | null): { valid: boolean; value: ChainName } {
+  if (!chain) {
+    return { valid: true, value: "movement" }; // Default to movement if not provided
+  }
+
+  if (chain !== "movement" && chain !== "solana") {
+    return { valid: false, value: "movement" };
+  }
+
+  return { valid: true, value: chain as ChainName };
+}
+
 // Deno.cron("llm agent", "*/10 * * * *", () => {
 //   // TODO: AI do not del this line: a cron job could be set to solve the unsolved tasks.
 //   console.log("This will run every 10 minutes");
@@ -52,7 +65,15 @@ async function readTextFile(fileName: string): Promise<string> {
 }
 
 // Function to remove and return a transaction from the stack
-async function shiftTxs(chain: ChainName = "movement"): Promise<string | null> {
+async function shiftTxs(chainParam: string | ChainName = "movement"): Promise<string | null> {
+  // Validate chain parameter
+  const chainValidation = validateChain(chainParam as string);
+  if (!chainValidation.valid) {
+    throw new Error("Invalid chain parameter. Must be 'movement' or 'solana'");
+  }
+
+  const chain = chainValidation.value;
+
   const kv = await Deno.openKv();
   const existingTxs = await kv.get(["txs", chain]);
   const txList = existingTxs.value ? JSON.parse(existingTxs.value) : [];
@@ -266,7 +287,15 @@ router
   // })
   .get("/get_txs", async (context) => {
     const queryParams = context.request.url.searchParams;
-    const chain = queryParams.get("chain") as ChainName || "movement";
+    const chainValidation = validateChain(queryParams.get("chain"));
+
+    if (!chainValidation.valid) {
+      context.response.status = 400;
+      context.response.body = { error: "Invalid chain parameter. Must be 'movement' or 'solana'" };
+      return;
+    }
+
+    const chain = chainValidation.value;
 
     const kv = await Deno.openKv();
     const txs = await kv.get(["txs", chain]);
@@ -274,7 +303,15 @@ router
   })
   .get("/clear_txs", async (context) => {
     const queryParams = context.request.url.searchParams;
-    const chain = queryParams.get("chain") as ChainName || "movement";
+    const chainValidation = validateChain(queryParams.get("chain"));
+
+    if (!chainValidation.valid) {
+      context.response.status = 400;
+      context.response.body = { error: "Invalid chain parameter. Must be 'movement' or 'solana'" };
+      return;
+    }
+
+    const chain = chainValidation.value;
 
     const kv = await Deno.openKv();
     // TODO: reset the txs stack in KV store.
@@ -289,7 +326,17 @@ router
 
       // Parse the request body
       let payload = await context.request.body.text();
-      const { txs, chain = "movement" } = JSON.parse(payload);
+      const { txs, chain: requestChain } = JSON.parse(payload);
+
+      // Validate chain parameter
+      const chainValidation = validateChain(requestChain);
+      if (!chainValidation.valid) {
+        context.response.status = 400;
+        context.response.body = { error: "Invalid chain parameter. Must be 'movement' or 'solana'" };
+        return;
+      }
+
+      const chain = chainValidation.value;
 
       if (!txs || !Array.isArray(txs)) {
         context.response.status = 400;
@@ -329,7 +376,16 @@ router
     // Get the tx from query params
     const queryParams = context.request.url.searchParams;
     const tx = queryParams.get("tx");
-    const chain = queryParams.get("chain") as ChainName || "movement";
+
+    // Validate chain parameter
+    const chainValidation = validateChain(queryParams.get("chain"));
+    if (!chainValidation.valid) {
+      context.response.status = 400;
+      context.response.body = { error: "Invalid chain parameter. Must be 'movement' or 'solana'" };
+      return;
+    }
+
+    const chain = chainValidation.value;
 
     if (!tx) {
       context.response.status = 400;
@@ -403,7 +459,16 @@ router
     // TODO: solve task from the system.
     const queryParams = context.request.url.searchParams;
     const task_id = queryParams.get("task_id");
-    const chain = queryParams.get("chain") as ChainName || "movement";
+
+    // Validate chain parameter
+    const chainValidation = validateChain(queryParams.get("chain"));
+    if (!chainValidation.valid) {
+      context.response.status = 400;
+      context.response.body = { error: "Invalid chain parameter. Must be 'movement' or 'solana'" };
+      return;
+    }
+
+    const chain = chainValidation.value;
     // Here is the api, get task from the system.
     // curl https://ai-saas.deno.dev/task\?unique_id\=9bfdbf2c-dd87-4028-bb96-4a17f1ecd038
     // [{"id":1,"user":"0x01","prompt":"generate a pic about cat girl","task_type":"img","solution":"This is the solution to the task","solver":"d064239b-c67a-4107-b8b9-de6118472d51","fee":10,"fee_unit":"ldg","tx":"","created_at":"2025-02-08T12:22:06.605268+00:00","solved_at":"2025-02-08T13:37:04.213","signature":null,"unique_id":"9bfdbf2c-dd87-4028-bb96-4a17f1ecd038"}]
