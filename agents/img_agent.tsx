@@ -11,6 +11,12 @@ const router = new Router();
 
 type ChainName = "movement" | "solana";
 
+// Chain configuration for network and token defaults
+const CHAIN_CONFIG: Record<ChainName, { network: string; token: string }> = {
+  movement: { network: "testnet-bardock", token: "MOVE" },
+  solana: { network: "devnet", token: "SOL" }
+};
+
 // Helper function to validate chain parameter
 function validateChain(chain: string | null): { valid: boolean; value: ChainName } {
   if (!chain) {
@@ -520,9 +526,9 @@ router
         },
         body: JSON.stringify({
           prompt: task.prompt,
-          "chain": chain,
-          "network": chain === "movement" ? "testnet-bardock" : "testnet",
-          "token": chain === "movement" ? "MOVE" : "",
+          chain: chain,
+          network: CHAIN_CONFIG[chain].network,
+          token: CHAIN_CONFIG[chain].token,
           tx: currentTx,
         }),
       }
@@ -531,6 +537,8 @@ router
     console.log("tokenTapestryResponse", tokenTapestryResponse);
 
     if (!tokenTapestryResponse.ok) {
+      const errorMessage = await tokenTapestryResponse.text();
+      console.error(`Failed to generate image: ${errorMessage}`);
       context.response.status = 500;
       context.response.body = { error: "Failed to generate image" };
       return;
