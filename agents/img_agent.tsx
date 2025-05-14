@@ -9,21 +9,25 @@ console.log("Hello from Image Agent!");
 
 const router = new Router();
 
-type ChainName = "movement" | "solana";
+const CHAIN_NAMES = ["movement", "solana", "sui"] as const;
+type ChainName = (typeof CHAIN_NAMES)[number];
 
 // Chain configuration for network and token defaults
 const CHAIN_CONFIG: Record<ChainName, { network: string; token: string }> = {
   movement: { network: "testnet-bardock", token: "MOVE" },
-  solana: { network: "devnet", token: "SOL" }
+  solana: { network: "devnet", token: "SOL" },
+  sui: { network: "testnet", token: "USDC" },
 };
 
 // Helper function to validate chain parameter
-function validateChain(chain: string | null): { valid: boolean; value: ChainName } {
+function validateChain(
+  chain: string | null,
+): { valid: boolean; value: ChainName } {
   if (!chain) {
     return { valid: true, value: "movement" }; // Default to movement if not provided
   }
 
-  if (chain !== "movement" && chain !== "solana") {
+  if (!CHAIN_NAMES.includes(chain as ChainName)) {
     return { valid: false, value: "movement" };
   }
 
@@ -71,7 +75,9 @@ async function readTextFile(fileName: string): Promise<string> {
 }
 
 // Function to remove and return a transaction from the stack
-async function shiftTxs(chainParam: string | ChainName = "movement"): Promise<string | null> {
+async function shiftTxs(
+  chainParam: string | ChainName = "movement",
+): Promise<string | null> {
   // Validate chain parameter
   const chainValidation = validateChain(chainParam as string);
   if (!chainValidation.valid) {
@@ -297,7 +303,9 @@ router
 
     if (!chainValidation.valid) {
       context.response.status = 400;
-      context.response.body = { error: "Invalid chain parameter. Must be 'movement' or 'solana'" };
+      context.response.body = {
+        error: `Invalid chain parameter. Must be ${CHAIN_NAMES.join(", ")}`,
+      };
       return;
     }
 
@@ -313,7 +321,9 @@ router
 
     if (!chainValidation.valid) {
       context.response.status = 400;
-      context.response.body = { error: "Invalid chain parameter. Must be 'movement' or 'solana'" };
+      context.response.body = {
+        error: `Invalid chain parameter. Must be ${CHAIN_NAMES.join(", ")}`,
+      };
       return;
     }
 
@@ -322,7 +332,9 @@ router
     const kv = await Deno.openKv();
     // TODO: reset the txs stack in KV store.
     await kv.set(["txs", chain], JSON.stringify([]));
-    context.response.body = { message: `Txs stack for ${chain} cleared successfully` };
+    context.response.body = {
+      message: `Txs stack for ${chain} cleared successfully`,
+    };
   })
   .post("/add_txs", async (context) => {
     // tx: From SUI: to transfer more than 0.003 usdc to 0x6b747322a55ff2e3525ed6810efa1b19fbe5d984bfae8afe12b10da65154b446
@@ -338,7 +350,9 @@ router
       const chainValidation = validateChain(requestChain);
       if (!chainValidation.valid) {
         context.response.status = 400;
-        context.response.body = { error: "Invalid chain parameter. Must be 'movement' or 'solana'" };
+        context.response.body = {
+          error: `Invalid chain parameter. Must be ${CHAIN_NAMES.join(", ")}`,
+        };
         return;
       }
 
@@ -387,7 +401,9 @@ router
     const chainValidation = validateChain(queryParams.get("chain"));
     if (!chainValidation.valid) {
       context.response.status = 400;
-      context.response.body = { error: "Invalid chain parameter. Must be 'movement' or 'solana'" };
+      context.response.body = {
+        error: `Invalid chain parameter. Must be ${CHAIN_NAMES.join(", ")}`,
+      };
       return;
     }
 
@@ -470,7 +486,9 @@ router
     const chainValidation = validateChain(queryParams.get("chain"));
     if (!chainValidation.valid) {
       context.response.status = 400;
-      context.response.body = { error: "Invalid chain parameter. Must be 'movement' or 'solana'" };
+      context.response.body = {
+        error: `Invalid chain parameter. Must be ${CHAIN_NAMES.join(", ")}`,
+      };
       return;
     }
 
@@ -481,7 +499,7 @@ router
 
     // Fetch task from the system
     const taskResponse = await fetch(
-      `https://ai-saas.deno.dev/task?unique_id=${task_id}`
+      `https://ai-saas.deno.dev/task?unique_id=${task_id}`,
     );
     if (!taskResponse.ok) {
       context.response.status = 500;
@@ -531,7 +549,7 @@ router
           token: CHAIN_CONFIG[chain].token,
           tx: currentTx,
         }),
-      }
+      },
     );
 
     console.log("tokenTapestryResponse", tokenTapestryResponse);
@@ -583,7 +601,7 @@ router
           solver: agentData.unique_id, // Use the unique_id from the file instead of agent_info.addr
           solver_type: ["SD"],
         }),
-      }
+      },
     );
 
     if (!submitResponse.ok) {
