@@ -79,7 +79,7 @@ async function shiftTxs(
   // Validate chain parameter
   const chainValidation = validateChain(chainParam as string);
   if (!chainValidation.valid) {
-    throw new Error("Invalid chain parameter. Must be 'movement' or 'solana'");
+    throw new Error(`Invalid chain parameter. Must be ${CHAIN_NAMES.join(", ")}`);
   }
 
   const chain = chainValidation.value;
