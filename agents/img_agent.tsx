@@ -3,11 +3,34 @@
 import { Application, Router } from "https://deno.land/x/oak/mod.ts";
 import { oakCors } from "https://deno.land/x/cors/mod.ts";
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
 console.log("Hello from Image Agent!");
 
 const router = new Router();
+
+const CHAIN_NAMES = ["movement", "solana", "sui"] as const;
+type ChainName = (typeof CHAIN_NAMES)[number];
+
+// Chain configuration for network and token defaults
+const CHAIN_CONFIG: Record<ChainName, { network: string; token: string }> = {
+  movement: { network: "testnet-bardock", token: "MOVE" },
+  solana: { network: "devnet", token: "SOL" },
+  sui: { network: "testnet", token: "USDC" },
+};
+
+// Helper function to validate chain parameter
+function validateChain(
+  chain: string | null,
+): { valid: boolean; value: ChainName } {
+  if (!chain) {
+    return { valid: true, value: "movement" }; // Default to movement if not provided
+  }
+
+  if (!CHAIN_NAMES.includes(chain as ChainName)) {
+    return { valid: false, value: "movement" };
+  }
+
+  return { valid: true, value: chain as ChainName };
+}
 
 // Deno.cron("llm agent", "*/10 * * * *", () => {
 //   // TODO: AI do not del this line: a cron job could be set to solve the unsolved tasks.
@@ -50,9 +73,19 @@ async function readTextFile(fileName: string): Promise<string> {
 }
 
 // Function to remove and return a transaction from the stack
-async function shiftTxs(): Promise<string | null> {
+async function shiftTxs(
+  chainParam: string | ChainName = "movement",
+): Promise<string | null> {
+  // Validate chain parameter
+  const chainValidation = validateChain(chainParam as string);
+  if (!chainValidation.valid) {
+    throw new Error(`Invalid chain parameter. Must be ${CHAIN_NAMES.join(", ")}`);
+  }
+
+  const chain = chainValidation.value;
+
   const kv = await Deno.openKv();
-  const existingTxs = await kv.get(["txs", "movement"]);
+  const existingTxs = await kv.get(["txs", chain]);
   const txList = existingTxs.value ? JSON.parse(existingTxs.value) : [];
 
   if (txList.length === 0) {
@@ -60,7 +93,7 @@ async function shiftTxs(): Promise<string | null> {
   }
 
   const currentTx = txList.shift();
-  await kv.set(["txs", "movement"], JSON.stringify(txList));
+  await kv.set(["txs", chain], JSON.stringify(txList));
   return currentTx;
 }
 
@@ -249,7 +282,7 @@ router
   })
   // .get("/remove_a_tx", async (context) => {
   //   const tx = await shiftTxs();
-    
+
   //   if (!tx) {
   //     context.response.status = 400;
   //     context.response.body = {
@@ -263,15 +296,43 @@ router
   //   };
   // })
   .get("/get_txs", async (context) => {
+    const queryParams = context.request.url.searchParams;
+    const chainValidation = validateChain(queryParams.get("chain"));
+
+    if (!chainValidation.valid) {
+      context.response.status = 400;
+      context.response.body = {
+        error: `Invalid chain parameter. Must be ${CHAIN_NAMES.join(", ")}`,
+      };
+      return;
+    }
+
+    const chain = chainValidation.value;
+
     const kv = await Deno.openKv();
-    const txs = await kv.get(["txs", "movement"]);
+    const txs = await kv.get(["txs", chain]);
     context.response.body = { txs: txs.value };
   })
   .get("/clear_txs", async (context) => {
+    const queryParams = context.request.url.searchParams;
+    const chainValidation = validateChain(queryParams.get("chain"));
+
+    if (!chainValidation.valid) {
+      context.response.status = 400;
+      context.response.body = {
+        error: `Invalid chain parameter. Must be ${CHAIN_NAMES.join(", ")}`,
+      };
+      return;
+    }
+
+    const chain = chainValidation.value;
+
     const kv = await Deno.openKv();
     // TODO: reset the txs stack in KV store.
-    await kv.set(["txs", "movement"], JSON.stringify([]));
-    context.response.body = { message: "Txs stack cleared successfully" };
+    await kv.set(["txs", chain], JSON.stringify([]));
+    context.response.body = {
+      message: `Txs stack for ${chain} cleared successfully`,
+    };
   })
   .post("/add_txs", async (context) => {
     // tx: From SUI: to transfer more than 0.003 usdc to 0x6b747322a55ff2e3525ed6810efa1b19fbe5d984bfae8afe12b10da65154b446
@@ -281,7 +342,19 @@ router
 
       // Parse the request body
       let payload = await context.request.body.text();
-      const { txs } = JSON.parse(payload);
+      const { txs, chain: requestChain } = JSON.parse(payload);
+
+      // Validate chain parameter
+      const chainValidation = validateChain(requestChain);
+      if (!chainValidation.valid) {
+        context.response.status = 400;
+        context.response.body = {
+          error: `Invalid chain parameter. Must be ${CHAIN_NAMES.join(", ")}`,
+        };
+        return;
+      }
+
+      const chain = chainValidation.value;
 
       if (!txs || !Array.isArray(txs)) {
         context.response.status = 400;
@@ -295,18 +368,18 @@ router
       const kv = await Deno.openKv();
 
       // Get existing txs from KV
-      const existingTxs = await kv.get(["txs", "movement"]);
+      const existingTxs = await kv.get(["txs", chain]);
       const txList = existingTxs.value ? JSON.parse(existingTxs.value) : [];
 
       // Add new txs to the list
       txList.push(...txs);
 
       // Store updated list back to KV
-      await kv.set(["txs", "movement"], JSON.stringify(txList));
+      await kv.set(["txs", chain], JSON.stringify(txList));
 
       context.response.status = 200;
       context.response.body = {
-        message: "Transactions added successfully",
+        message: `Transactions added successfully to ${chain}`,
         count: txs.length,
       };
     } catch (error) {
@@ -322,6 +395,18 @@ router
     const queryParams = context.request.url.searchParams;
     const tx = queryParams.get("tx");
 
+    // Validate chain parameter
+    const chainValidation = validateChain(queryParams.get("chain"));
+    if (!chainValidation.valid) {
+      context.response.status = 400;
+      context.response.body = {
+        error: `Invalid chain parameter. Must be ${CHAIN_NAMES.join(", ")}`,
+      };
+      return;
+    }
+
+    const chain = chainValidation.value;
+
     if (!tx) {
       context.response.status = 400;
       context.response.body = { error: "Transaction hash is required" };
@@ -332,20 +417,20 @@ router
     const kv = await Deno.openKv();
 
     // Get existing txs from KV
-    const existingTxs = await kv.get(["txs", "movement"]);
+    const existingTxs = await kv.get(["txs", chain]);
     const txList = existingTxs.value ? JSON.parse(existingTxs.value) : [];
 
     // Add new tx to the list
     txList.push(tx);
 
     // Store updated list back to KV
-    await kv.set(["txs", "movement"], JSON.stringify(txList));
+    await kv.set(["txs", chain], JSON.stringify(txList));
 
-    const updatedExistingTxs = await kv.get(["txs", "movement"]);
+    const updatedExistingTxs = await kv.get(["txs", chain]);
     console.log("txList", updatedExistingTxs.value);
 
     context.response.body = {
-      message: "Transaction added successfully",
+      message: `Transaction added successfully to ${chain}`,
     };
   })
   .get("/register", async (context) => {
@@ -394,13 +479,25 @@ router
     // TODO: solve task from the system.
     const queryParams = context.request.url.searchParams;
     const task_id = queryParams.get("task_id");
+
+    // Validate chain parameter
+    const chainValidation = validateChain(queryParams.get("chain"));
+    if (!chainValidation.valid) {
+      context.response.status = 400;
+      context.response.body = {
+        error: `Invalid chain parameter. Must be ${CHAIN_NAMES.join(", ")}`,
+      };
+      return;
+    }
+
+    const chain = chainValidation.value;
     // Here is the api, get task from the system.
     // curl https://ai-saas.deno.dev/task\?unique_id\=9bfdbf2c-dd87-4028-bb96-4a17f1ecd038
     // [{"id":1,"user":"0x01","prompt":"generate a pic about cat girl","task_type":"img","solution":"This is the solution to the task","solver":"d064239b-c67a-4107-b8b9-de6118472d51","fee":10,"fee_unit":"ldg","tx":"","created_at":"2025-02-08T12:22:06.605268+00:00","solved_at":"2025-02-08T13:37:04.213","signature":null,"unique_id":"9bfdbf2c-dd87-4028-bb96-4a17f1ecd038"}]
 
     // Fetch task from the system
     const taskResponse = await fetch(
-      `https://ai-saas.deno.dev/task?unique_id=${task_id}`
+      `https://ai-saas.deno.dev/task?unique_id=${task_id}`,
     );
     if (!taskResponse.ok) {
       context.response.status = 500;
@@ -424,7 +521,7 @@ router
       return;
     }
 
-    const currentTx = await shiftTxs();
+    const currentTx = await shiftTxs(chain);
 
     // curl -X POST https://api.tokentapestry.com/text2img \
     // -H "Content-Type: application/json" \
@@ -445,17 +542,19 @@ router
         },
         body: JSON.stringify({
           prompt: task.prompt,
-          "chain": "movement",
-          "network": "testnet-bardock",
-          "token": "MOVE",
+          chain: chain,
+          network: CHAIN_CONFIG[chain].network,
+          token: CHAIN_CONFIG[chain].token,
           tx: currentTx,
         }),
-      }
+      },
     );
 
     console.log("tokenTapestryResponse", tokenTapestryResponse);
 
     if (!tokenTapestryResponse.ok) {
+      const errorMessage = await tokenTapestryResponse.text();
+      console.error(`Failed to generate image: ${errorMessage}`);
       context.response.status = 500;
       context.response.body = { error: "Failed to generate image" };
       return;
@@ -500,7 +599,7 @@ router
           solver: agentData.unique_id, // Use the unique_id from the file instead of agent_info.addr
           solver_type: ["SD"],
         }),
-      }
+      },
     );
 
     if (!submitResponse.ok) {
