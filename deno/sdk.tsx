@@ -13,6 +13,57 @@ router
     .get("/", async (context) => {
         context.response.body = "Hello from AI SaaSSDK!";
     })
+    .get("/agent", async (context) => {
+        const queryParams = context.request.url.searchParams;
+        const addr = queryParams.get("addr");
+        const unique_id = queryParams.get("unique_id");
+        const owner_addr = queryParams.get("owner_addr");
+
+        if (!addr && !unique_id && !owner_addr) {
+            context.response.status = 400;
+            context.response.body = { error: "Either addr, unique_id, or owner_addr parameter is required" };
+            return;
+        }
+
+        const supabase = createClient(
+            Deno.env.get("SUPABASE_URL") ?? "",
+            Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+        );
+
+        let query = supabase
+            .from("micro_ai_saas_agents")
+            .select("*");
+
+        if (addr) {
+            query = query.eq("addr", addr);
+        } else if (unique_id) {
+            query = query.eq("unique_id", unique_id);
+        } else if (owner_addr) {
+            query = query.eq("owner_addr", owner_addr);
+        }
+
+        const { data, error } = await query;
+
+        if (error) {
+            context.response.status = 500;
+            context.response.body = { error: error.message };
+            return;
+        }
+
+        if (!data || data.length === 0) {
+            context.response.status = 404;
+            context.response.body = { error: "No agents found" };
+            return;
+        }
+
+        // If searching by addr or unique_id, return single agent
+        // If searching by owner_addr, return array of agents
+        if (addr || unique_id) {
+            context.response.body = data[0];
+        } else {
+            context.response.body = data;
+        }
+    })
     .get("/agents", async (context) => {
         const supabase = createClient(
             Deno.env.get("SUPABASE_URL") ?? "",
