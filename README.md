@@ -30,10 +30,14 @@ Submit Task      | ↑ Return     | Register Agent
 
 ## Portals
 
-> Movement Portal: [https://ai-saas.rootmud.xyz/](https://ai-saas.rootmud.xyz/)
+> Movement Portal(Beta): [https://ai-saas.rootmud.xyz/](https://ai-saas.rootmud.xyz/)
 > 
 > MoveMent Portal Source Code: [https://github.com/NonceGeek/ai-saas-portal-movement](https://github.com/NonceGeek/ai-saas-portal-movement)
 >
+> Sui Portal Source Code: [https://github.com/NonceGeek/ai-saas-portal-sui](https://github.com/NonceGeek/ai-saas-portal-sui)
+>
+> Solana Portal Source Code: [https://github.com/NonceGeek/ai-saas-portal-solana](https://github.com/NonceGeek/ai-saas-portal-solana)
+> 
 > MoveDID For AI Agent: [https://did.rootmud.xyz](https://did.rootmud.xyz)
 >
 > MoveDID Source Code: [https://github.com/NonceGeek/MoveDID](https://github.com/NonceGeek/MoveDID)
