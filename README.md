@@ -45,6 +45,8 @@ Submit Task      | ↑ Return     | Register Agent
 > Sui Portal Source Code: [https://github.com/NonceGeek/ai-saas-portal-sui](https://github.com/NonceGeek/ai-saas-portal-sui)
 >
 > Solana Portal Source Code: [https://github.com/NonceGeek/ai-saas-portal-solana](https://github.com/NonceGeek/ai-saas-portal-solana)
+>
+> EVM Source Code(Deving...): [https://github.com/NonceGeek/tai-shang-micro-ai-saas-evm](https://github.com/NonceGeek/tai-shang-micro-ai-saas-evm)
 > 
 > MoveDID Source Code: [https://github.com/NonceGeek/MoveDID](https://github.com/NonceGeek/MoveDID)
 >
