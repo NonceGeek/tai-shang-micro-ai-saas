@@ -1,6 +1,8 @@
 # TaiShang AI Agent Market API Documentation
 
-Base URL: `http://localhost:8000` (or your deployed server URL)
+Base URL: `https://ai-saas.deno.dev/`
+
+If you ran it locally: `http://localhost:8000` (or your deployed server URL)
 
 ## Table of Contents
 
