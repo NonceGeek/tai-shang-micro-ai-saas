@@ -10,6 +10,8 @@
     "@deno/gfm": "jsr:@deno/gfm@^0.9.0"
   },
   "tasks": {
-    "start": "deno run --allow-net --allow-env sdk.tsx"
-  }
+    "dev": "deno run --allow-net --allow-env --allow-read --watch main.tsx",
+    "start": "deno run --allow-net --allow-env --allow-read main.tsx",
+    "compile": "deno compile --target x86_64-unknown-linux-gnu --allow-net --allow-read -o backend-linux main.tsx"
+  },
 }
