@@ -343,9 +343,11 @@ ${body}
     let payload = await context.request.body.text();
     const {
       password,
+      addr_type,
       addr,
       addrs,
       owner_addr,
+      owner_addr_type,
       type,
       homepage,
       source_url,
@@ -404,6 +406,8 @@ ${body}
       name,
     };
 
+    if (addr_type) insertData.addr_type = addr_type;
+    if (owner_addr_type) insertData.owner_addr_type = owner_addr_type;
     if (homepage) insertData.homepage = homepage;
     if (source_url) insertData.source_url = source_url;
     if (parsedAddrs) insertData.addrs = parsedAddrs;
