@@ -586,46 +586,94 @@ ${body}
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY_2") ?? ""
     );
 
-    // Parse the request body
-    let payload = await context.request.body.text();
-    const { user, solver, prompt, task_type, fee, fee_unit, coupon } =
-      JSON.parse(payload);
+    try {
+      // Parse the request body
+      let payload = await context.request.body.text();
+      let { user, solver, prompt, task_type, fee, fee_unit, coupon } =
+        JSON.parse(payload);
 
-    // Validate required fields
-    if (!user || !prompt || !task_type) {
-      context.response.status = 400;
-      context.response.body = {
-        error:
-          "Missing required fields: user, prompt, and task_type are required",
+      // Validate required fields
+      if (!user || !prompt || !task_type) {
+        context.response.status = 400;
+        context.response.body = {
+          error:
+            "Missing required fields: user, prompt, and task_type are required",
+        };
+        return;
+      }
+
+      // Verify and process coupon if provided
+      if (coupon) {
+        const { data: couponData, error: couponError } = await supabase
+          .from("micro_ai_saas_coupons")
+          .select("*")
+          .eq("addr", coupon);
+
+        if (couponError) {
+          context.response.status = 500;
+          context.response.body = { error: couponError.message };
+          return;
+        }
+
+        if (!couponData || couponData.length === 0) {
+          context.response.status = 400;
+          context.response.body = { error: "Coupon not found" };
+          return;
+        }
+
+        if (couponData[0].if_used) {
+          context.response.status = 400;
+          context.response.body = { error: "Coupon already used" };
+          return;
+        }
+
+        // update the coupon if_used to true
+        const { error: couponUpdateError } = await supabase
+          .from("micro_ai_saas_coupons")
+          .update({ if_used: true })
+          .eq("addr", coupon);
+
+        if (couponUpdateError) {
+          context.response.status = 500;
+          context.response.body = { error: couponUpdateError.message };
+          return;
+        }
+
+        // Set solver to coupon issuer if coupon is valid
+        solver = couponData[0].issuer;
+      }
+
+      // Build insert data object
+      const insertData: Record<string, any> = {
+        user,
+        prompt,
+        task_type,
       };
-      return;
-    }
 
-    // Insert new task
-    const insertData: Record<string, any> = {
-      user,
-      solver,
-      coupon,
-      prompt,
-      task_type,
-    };
+      if (solver) insertData.solver = solver;
+      if (coupon) insertData.coupon = coupon;
+      if (fee) insertData.fee = fee;
+      if (fee_unit) insertData.fee_unit = fee_unit;
 
-    if (fee) insertData.fee = fee;
-    if (fee_unit) insertData.fee_unit = fee_unit;
+      // Insert new task
+      const { data, error } = await supabase
+        .from("micro_ai_saas")
+        .insert([insertData])
+        .select();
 
-    const { data, error } = await supabase
-      .from("micro_ai_saas")
-      .insert([insertData])
-      .select();
+      if (error) {
+        context.response.status = 500;
+        context.response.body = { error: error.message };
+        return;
+      }
 
-    if (error) {
+      context.response.status = 201;
+      context.response.body = data[0];
+    } catch (err) {
+      console.error("Unexpected error:", err);
       context.response.status = 500;
-      context.response.body = { error: error.message };
-      return;
+      context.response.body = { error: "Internal server error" };
     }
-
-    context.response.status = 201;
-    context.response.body = data[0];
   })
   .get("/v2/dev/gen_agent_key", async (context) => {
     // Generate a new private key for the agent
@@ -1167,7 +1215,7 @@ ${body}
 
     // Parse the request body
     let payload = await context.request.body.text();
-    const { password } = JSON.parse(payload);
+    const { password, issuer, price, price_unit } = JSON.parse(payload);
 
     // Verify admin password
     if (!(await verifyAdminPassword(context, password))) {
@@ -1180,15 +1228,21 @@ ${body}
       const privateKey = wallet.privateKey;
       const address = wallet.address;
 
+      // Build insert data object
+      const insertData: Record<string, any> = {
+        priv: privateKey,
+        addr: address,
+      };
+
+      // Add optional fields if provided
+      if (issuer) insertData.issuer = issuer;
+      if (price) insertData.price = price;
+      if (price_unit) insertData.price_unit = price_unit;
+
       // Insert the coupon into the database
       const { data, error } = await supabase
         .from("micro_ai_saas_coupons")
-        .insert([
-          {
-            priv: privateKey,
-            addr: address,
-          },
-        ])
+        .insert([insertData])
         .select();
 
       if (error) {
@@ -1204,6 +1258,9 @@ ${body}
         coupon: address,
         privateKey: privateKey,
         createdAt: data[0].created_at,
+        price: data[0].price,
+        price_unit: data[0].price_unit,
+        issuer: data[0].issuer,
       };
     } catch (err) {
       console.error("Unexpected error:", err);
