@@ -13,7 +13,9 @@ async function sha256(message: string): Promise<string> {
   const msgBuffer = new TextEncoder().encode(message);
   const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  const hashHex = hashArray
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
   return hashHex;
 }
 
@@ -37,7 +39,103 @@ router
   .get("/", async (context) => {
     context.response.body = "Hello from AI Agent Market's API Server!";
   })
-  .get("/v2/docs", async (context) =>{
+  .get("/v2/whitepaper/cn", async (context) => {
+    try {
+      const readmeText = await Deno.readTextFile("./whitepaper.md");
+      context.response.body = readmeText;
+    } catch (err) {
+      console.error("Error reading README:", err);
+      context.response.status = 500;
+      context.response.body = { error: "Could not load documentation" };
+    }
+  })
+  .get("/v2/whitepaper/en", async (context) => {
+    try {
+      const readmeText = await Deno.readTextFile("./whitepaper-en.md");
+      context.response.body = readmeText;
+    } catch (err) {
+      console.error("Error reading README:", err);
+      context.response.status = 500;
+      context.response.body = { error: "Could not load documentation" };
+    }
+  })
+  .get("/v2/whitepaper/cn/html", async (context) => {
+    try {
+      // Read README.md file
+      const readmeText = await Deno.readTextFile("./whitepaper.md");
+
+      // Render markdown to HTML with GFM styles
+      const body = render(readmeText);
+
+      // Create complete HTML document with GFM CSS
+      const html = `<!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TaiShang AI Agent Market Whitepaper</title>
+    <style>
+      ${CSS}
+      body {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+    </style>
+  </head>
+  <body>
+  ${body}
+  </body>
+  </html>`;
+
+      // Set response headers for HTML
+      context.response.headers.set("Content-Type", "text/html; charset=utf-8");
+      context.response.body = html;
+    } catch (err) {
+      console.error("Error reading README:", err);
+      context.response.status = 500;
+      context.response.body = { error: "Could not load documentation" };
+    }
+  })
+  .get("/v2/whitepaper/en/html", async (context) => {
+    try {
+      // Read README.md file
+      const readmeText = await Deno.readTextFile("./whitepaper-en.md");
+
+      // Render markdown to HTML with GFM styles
+      const body = render(readmeText);
+
+      // Create complete HTML document with GFM CSS
+      const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TaiShang AI Agent Market Whitepaper</title>
+  <style>
+    ${CSS}
+    body {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+  </style>
+</head>
+<body>
+${body}
+</body>
+</html>`;
+
+      // Set response headers for HTML
+      context.response.headers.set("Content-Type", "text/html; charset=utf-8");
+      context.response.body = html;
+    } catch (err) {
+      console.error("Error reading README:", err);
+      context.response.status = 500;
+      context.response.body = { error: "Could not load documentation" };
+    }
+  })
+  .get("/v2/docs", async (context) => {
     try {
       const readmeText = await Deno.readTextFile("./apidoc.md");
       context.response.body = readmeText;
@@ -48,15 +146,15 @@ router
     }
   })
   .get("/v2/docs/html", async (context) => {
-      try {
-        // Read README.md file
-        const readmeText = await Deno.readTextFile("./apidoc.md");
-        
-        // Render markdown to HTML with GFM styles
-        const body = render(readmeText);
-        
-        // Create complete HTML document with GFM CSS
-        const html = `<!DOCTYPE html>
+    try {
+      // Read README.md file
+      const readmeText = await Deno.readTextFile("./apidoc.md");
+
+      // Render markdown to HTML with GFM styles
+      const body = render(readmeText);
+
+      // Create complete HTML document with GFM CSS
+      const html = `<!DOCTYPE html>
     <html lang="en">
     <head>
       <meta charset="UTF-8">
@@ -75,15 +173,15 @@ router
     ${body}
     </body>
     </html>`;
-        
-        // Set response headers for HTML
-        context.response.headers.set("Content-Type", "text/html; charset=utf-8");
-        context.response.body = html;
-      } catch (err) {
-        console.error("Error reading README:", err);
-        context.response.status = 500;
-        context.response.body = { error: "Could not load documentation" };
-      }
+
+      // Set response headers for HTML
+      context.response.headers.set("Content-Type", "text/html; charset=utf-8");
+      context.response.body = html;
+    } catch (err) {
+      console.error("Error reading README:", err);
+      context.response.status = 500;
+      context.response.body = { error: "Could not load documentation" };
+    }
   })
   .get("/v2/agent", async (context) => {
     const queryParams = context.request.url.searchParams;
@@ -252,6 +350,7 @@ router
       homepage,
       source_url,
       description,
+      name,
       task_request_api,
     } = JSON.parse(payload);
 
@@ -302,6 +401,7 @@ router
       type,
       description,
       task_request_api,
+      name,
     };
 
     if (homepage) insertData.homepage = homepage;
@@ -488,7 +588,8 @@ router
 
     // Parse the request body
     let payload = await context.request.body.text();
-    const { user, solver, prompt, task_type, fee, fee_unit, coupon} = JSON.parse(payload);
+    const { user, solver, prompt, task_type, fee, fee_unit, coupon } =
+      JSON.parse(payload);
 
     // Validate required fields
     if (!user || !prompt || !task_type) {
@@ -598,13 +699,21 @@ router
 
     // Parse the request body
     let payload = await context.request.body.text();
-    const { unique_id, solution, optimized_prompt, solver, solver_type, signature } = JSON.parse(payload);
+    const {
+      unique_id,
+      solution,
+      optimized_prompt,
+      solver,
+      solver_type,
+      signature,
+    } = JSON.parse(payload);
 
     // Validate required fields
     if (!unique_id || !solution || !solver) {
       context.response.status = 400;
       context.response.body = {
-        error: "Missing required fields: unique_id, solution, and solver are required",
+        error:
+          "Missing required fields: unique_id, solution, and solver are required",
       };
       return;
     }
@@ -663,12 +772,13 @@ router
         try {
           // Verify the signature
           const recoveredAddress = verifyMessage(message, signature);
-          
+
           // Check if recovered address matches the designated solver
           if (recoveredAddress.toLowerCase() !== task.solver.toLowerCase()) {
             context.response.status = 403;
             context.response.body = {
-              error: "Signature verification failed: You are not the designated solver",
+              error:
+                "Signature verification failed: You are not the designated solver",
               designatedSolver: task.solver,
               yourAddress: recoveredAddress,
             };
@@ -676,7 +786,7 @@ router
           }
 
           // Also check if the solver matches
-          if (solver!== task.solver) {
+          if (solver !== task.solver) {
             context.response.status = 403;
             context.response.body = {
               error: "solver does not match the designated solver",
@@ -726,7 +836,7 @@ router
       if (task.coupon) {
         const { error: couponError } = await supabase
           .from("micro_ai_saas_coupons")
-          .update({ if_used: true, owner: solver})
+          .update({ if_used: true, owner: solver })
           .eq("addr", task.coupon);
 
         if (couponError) {
@@ -761,7 +871,8 @@ router
     if (!privkey || !unique_id || !vote) {
       context.response.status = 400;
       context.response.body = {
-        error: "Missing required fields: privkey, unique_id, and vote are required",
+        error:
+          "Missing required fields: privkey, unique_id, and vote are required",
       };
       return;
     }
@@ -818,11 +929,12 @@ router
       // Verify privkey matches the coupon address
       try {
         const wallet = new Wallet(privkey);
-        
+
         if (wallet.address.toLowerCase() !== task.coupon.toLowerCase()) {
           context.response.status = 403;
           context.response.body = {
-            error: "Coupon verification failed: Private key does not match the task's coupon",
+            error:
+              "Coupon verification failed: Private key does not match the task's coupon",
             expectedCoupon: task.coupon,
             providedAddress: wallet.address,
           };
@@ -867,7 +979,7 @@ router
       const { error: couponUpdateError } = await supabase
         .from("micro_ai_saas_coupons")
         .update({
-          if_voted: true
+          if_voted: true,
         })
         .eq("addr", task.coupon);
 
@@ -935,7 +1047,8 @@ router
     if (!unique_id || !review || !privkey) {
       context.response.status = 400;
       context.response.body = {
-        error: "Missing required fields: unique_id, review, and privkey are required",
+        error:
+          "Missing required fields: unique_id, review, and privkey are required",
       };
       return;
     }
@@ -985,11 +1098,12 @@ router
       try {
         // Create wallet from privkey and verify it matches the coupon address
         const wallet = new Wallet(privkey);
-        
+
         if (wallet.address.toLowerCase() !== task.coupon.toLowerCase()) {
           context.response.status = 403;
           context.response.body = {
-            error: "Coupon verification failed: Private key does not match the task's coupon",
+            error:
+              "Coupon verification failed: Private key does not match the task's coupon",
             expectedCoupon: task.coupon,
             providedAddress: wallet.address,
           };
@@ -1008,7 +1122,7 @@ router
       const { data: updatedTask, error: updateError } = await supabase
         .from("micro_ai_saas")
         .update({
-          review: review
+          review: review,
         })
         .eq("unique_id", unique_id)
         .select();
@@ -1022,17 +1136,17 @@ router
 
       // Update coupon if task has one
       if (task.coupon) {
-          const { error: couponError } = await supabase
-            .from("micro_ai_saas_coupons")
-            .update({ if_reviewed: true })
-            .eq("addr", task.coupon);
+        const { error: couponError } = await supabase
+          .from("micro_ai_saas_coupons")
+          .update({ if_reviewed: true })
+          .eq("addr", task.coupon);
 
-          if (couponError) {
-            console.error("Failed to update coupon:", couponError);
-            // Note: We don't fail the request if coupon update fails
-            // as the review is already recorded
-          }
+        if (couponError) {
+          console.error("Failed to update coupon:", couponError);
+          // Note: We don't fail the request if coupon update fails
+          // as the review is already recorded
         }
+      }
 
       context.response.status = 200;
       context.response.body = {
@@ -1072,7 +1186,7 @@ router
         .insert([
           {
             priv: privateKey,
-            addr: address
+            addr: address,
           },
         ])
         .select();
