@@ -820,9 +820,24 @@ ${body}
         try {
           // Verify the signature
           const recoveredAddress = verifyMessage(message, signature);
-
+          // task.solver is the uuid of the agent, get the agent from the database
+          const { data: agents, error: agentSelectError } = await supabase
+            .from("micro_ai_saas_agents")
+            .select("*")
+            .eq("unique_id", task.solver);
+          if (agentSelectError) {
+            context.response.status = 500;
+            context.response.body = { error: agentSelectError.message };
+            return;
+          }
+          if (!agents || agents.length === 0) {
+            context.response.status = 404;
+            context.response.body = { error: "Agent not found" };
+            return;
+          }
+          const agent = agents[0];
           // Check if recovered address matches the designated solver
-          if (recoveredAddress.toLowerCase() !== task.solver.toLowerCase()) {
+          if (recoveredAddress.toLowerCase() !== agent.addr.toLowerCase()) {
             context.response.status = 403;
             context.response.body = {
               error:
