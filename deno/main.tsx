@@ -898,6 +898,28 @@ ${body}
         return;
       }
 
+      // Update agent solve_times counter
+      const finalSolver = task.solver || solver;
+      if (finalSolver) {
+        const { data: agents, error: agentSelectError } = await supabase
+          .from("micro_ai_saas_agents")
+          .select("solve_times")
+          .eq("unique_id", finalSolver);
+
+        if (!agentSelectError && agents && agents.length > 0) {
+          const currentSolveTimes = agents[0].solve_times || 0;
+          const { error: agentUpdateError } = await supabase
+            .from("micro_ai_saas_agents")
+            .update({ solve_times: currentSolveTimes + 1 })
+            .eq("unique_id", finalSolver);
+
+          if (agentUpdateError) {
+            console.error("Failed to update agent solve_times:", agentUpdateError);
+            // Continue anyway - solution is already recorded
+          }
+        }
+      }
+
       // Update coupon if task has one
 
       if (task.coupon) {
