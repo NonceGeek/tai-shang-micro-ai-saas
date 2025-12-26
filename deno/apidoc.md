@@ -200,10 +200,13 @@ curl "http://localhost:8000/v2/agent?owner_addr=0x456..."
     "ethereum": "0x...",
     "polygon": "0x..."
   },
-  "crons": {
-    "daily": "0 0 * * *",
-    "hourly": "0 * * * *"
-  },
+  "crons": [
+    {
+      "cron": "0 19 * * *",
+      "name": "handle_tasks",
+      "description": "handle the tasks that have be distributed to this agent."
+    }
+  ],
   "solve_times": 42,
   "up_votes": 30,
   "down_votes": 2,
@@ -249,9 +252,13 @@ Add a new agent to the system. Requires admin authentication.
     "ethereum": "0x...",
     "polygon": "0x..."
   },
-  "crons": {
-    "daily": "0 0 * * *"
-  }
+  "crons": [
+    {
+      "cron": "0 19 * * *",
+      "name": "handle_tasks",
+      "description": "handle the tasks that have be distributed to this agent."
+    }
+  ]
 }
 ```
 
@@ -270,7 +277,7 @@ Add a new agent to the system. Requires admin authentication.
 - `description`: Agent description
 - `task_request_api`: API endpoint for task requests
 - `addrs`: JSON object with multiple chain addresses
-- `crons`: JSON object with cron job schedules
+- `crons`: JSON array of cron job objects, each with `cron` (schedule), `name`, and `description` fields
 
 **Status Codes:**
 - `201`: Created successfully
@@ -316,8 +323,7 @@ Retrieve tasks with cursor-based pagination and filtering options.
 - `unsolved` (optional, default: `false`): Filter for unsolved tasks only
   - `true`: Only return tasks without solutions
   - `false`: Return all tasks
-- `agent_addr` (optional): Filter by agent address
-- `owner_addr` (optional): Filter by owner address
+- `solver` (optional): Filter by solver's unique_id (agent unique identifier)
 
 **Cursor-Based Pagination:**
 
@@ -372,8 +378,11 @@ curl "http://localhost:8000/v2/tasks?limit=10&ascend=false&cursor=90"
 # Get only unsolved tasks
 curl "http://localhost:8000/v2/tasks?unsolved=true&limit=20"
 
-# Filter by agent address
-curl "http://localhost:8000/v2/tasks?agent_addr=0x123...&limit=10"
+# Filter by solver (agent unique_id)
+curl "http://localhost:8000/v2/tasks?solver=agent_uuid_123&limit=10"
+
+# Combine filters: Get unsolved tasks for a specific solver
+curl "http://localhost:8000/v2/tasks?solver=agent_uuid_123&unsolved=true&limit=20"
 ```
 
 ### POST `/v2/add_task`

@@ -519,8 +519,7 @@ ${body}
     const cursor = queryParams.get("cursor");
     const unsolved = queryParams.get("unsolved") === "true";
     const ascend = queryParams.get("ascend") === "true";
-    const agent_addr = queryParams.get("agent_addr");
-    const owner_addr = queryParams.get("owner_addr");
+    const solver = queryParams.get("solver");
     /*
     HINT:
       🔑 关键点：
@@ -551,11 +550,8 @@ ${body}
         .select("*")
         .order("id", { ascending: ascend })
         .limit(limitNum);
-      if (agent_addr) {
-        query = query.eq("agent_addr", agent_addr);
-      }
-      if (owner_addr) {
-        query = query.eq("owner_addr", owner_addr);
+      if (solver) {
+        query = query.eq("solver", solver);
       }
 
       // Filter for unsolved tasks if requested
