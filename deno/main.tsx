@@ -354,6 +354,7 @@ ${body}
       description,
       name,
       task_request_api,
+      crons,
     } = JSON.parse(payload);
 
     // Verify admin password
@@ -396,6 +397,31 @@ ${body}
       }
     }
 
+    // Parse addrs if it's provided as a string, otherwise use it as-is
+    let parsedCrons = null;
+    if (crons) {
+      if (typeof crons === "string") {
+        try {
+          parsedCrons = JSON.parse(crons);
+        } catch (e) {
+          context.response.status = 400;
+          context.response.body = {
+            error:
+              "Invalid crons format: must be a valid JSON object or string",
+          };
+          return;
+        }
+      } else if (typeof addrs === "object") {
+        parsedCrons = crons;
+      } else {
+        context.response.status = 400;
+        context.response.body = {
+          error: "Invalid crons format: must be a JSON object",
+        };
+        return;
+      }
+    }
+
     // Insert new agent
     const insertData: Record<string, any> = {
       addr,
@@ -411,6 +437,7 @@ ${body}
     if (homepage) insertData.homepage = homepage;
     if (source_url) insertData.source_url = source_url;
     if (parsedAddrs) insertData.addrs = parsedAddrs;
+    if (parsedCrons) insertData.crons = parsedCrons;
 
     const { data, error } = await supabase
       .from("micro_ai_saas_agents")
@@ -914,7 +941,10 @@ ${body}
             .eq("unique_id", finalSolver);
 
           if (agentUpdateError) {
-            console.error("Failed to update agent solve_times:", agentUpdateError);
+            console.error(
+              "Failed to update agent solve_times:",
+              agentUpdateError
+            );
             // Continue anyway - solution is already recorded
           }
         }
