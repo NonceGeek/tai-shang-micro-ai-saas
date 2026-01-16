@@ -19,6 +19,18 @@ async function sha256(message: string): Promise<string> {
   return hashHex;
 }
 
+// Helper function to format integer amount with decimals
+function formatIntegerAmount(amountInt: number | string, decimals: number): string {
+  if (decimals === 0) {
+    return amountInt.toString();
+  }
+  const s = amountInt.toString().padStart(decimals + 1, "0");
+  const whole = s.slice(0, -decimals);
+  const frac = s.slice(-decimals);
+  // Remove trailing zeros and decimal point if all zeros
+  return `${whole}.${frac}`.replace(/\.?0+$/, '');
+}
+
 // Admin password verification function
 async function verifyAdminPassword(
   context: any,
@@ -245,10 +257,21 @@ ${body}
       //   }
       // }
     );
+    
+    // Get active parameter from query string
+    const queryParams = context.request.url.searchParams;
+    const activeParam = queryParams.get("actived");
+    
+    // Build query with optional active filter
+    let query = supabase.from("micro_ai_saas_agents").select("*");
+    if (activeParam === "true") {
+      query = query.eq("actived", true);
+    } else if (activeParam === "false") {
+      query = query.eq("actived", false);
+    }
+    // If active is not provided or has other value, return all agents (no filter)
 
-    let { data: agents, error } = await supabase
-      .from("micro_ai_saas_agents")
-      .select("*");
+    const { data: agents, error } = await query;
 
     if (error) {
       context.response.status = 500;
@@ -342,7 +365,6 @@ ${body}
     // Parse the request body
     let payload = await context.request.body.text();
     const {
-      password,
       addr_type,
       addr,
       addrs,
@@ -355,12 +377,8 @@ ${body}
       name,
       task_request_api,
       crons,
+      logo_url
     } = JSON.parse(payload);
-
-    // Verify admin password
-    if (!(await verifyAdminPassword(context, password))) {
-      return { error: "Unauthorized: Invalid password" };
-    }
 
     // Validate required fields
     if (!addr || !owner_addr || !type) {
@@ -433,17 +451,17 @@ ${body}
     };
 
     if (addr_type) insertData.addr_type = addr_type;
+    if (logo_url) insertData.logo = logo_url;
     if (owner_addr_type) insertData.owner_addr_type = owner_addr_type;
     if (homepage) insertData.homepage = homepage;
     if (source_url) insertData.source_url = source_url;
     if (parsedAddrs) insertData.addrs = parsedAddrs;
     if (parsedCrons) insertData.crons = parsedCrons;
-
+    // agent submitted will be unactive default, need to be approved by admin.
     const { data, error } = await supabase
       .from("micro_ai_saas_agents")
       .insert([insertData])
       .select();
-
     if (error) {
       context.response.status = 500;
       context.response.body = { error: error.message };
@@ -547,7 +565,7 @@ ${body}
       // Build the query with pagination
       let query = supabase
         .from("micro_ai_saas")
-        .select("*")
+        .select("*, asset_units!fee_unit(decimals)")
         .order("id", { ascending: ascend })
         .limit(limitNum);
       if (solver) {
@@ -585,6 +603,28 @@ ${body}
         return;
       }
 
+      // Format the fee for each task using decimals from asset_units
+      if (data && data.length > 0) {
+        data.forEach((task: any) => {
+          if (task.fee !== null) {
+            if (task.asset_units && task.asset_units.decimals !== undefined) {
+              const decimals = task.asset_units.decimals;
+              const feeValue = typeof task.fee === "string" 
+                ? parseInt(task.fee, 10) 
+                : Math.floor(Number(task.fee));
+              if (!isNaN(feeValue)) {
+                task.fee_format = formatIntegerAmount(feeValue, decimals);
+              } else {
+                task.fee_format = task.fee;
+              }
+            } else {
+              // If no decimals available, use fee as-is
+              task.fee_format = task.fee;
+            }
+          }
+        });
+      }
+
       // Calculate next cursor for pagination
       let nextCursor = null;
       if (data && data.length === limitNum && data.length > 0) {
@@ -606,6 +646,25 @@ ${body}
       context.response.status = 500;
       context.response.body = { error: "Internal server error" };
     }
+  })
+  .get("/v2/asset_units", async (context) => {
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL_2") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY_2") ?? ""
+    );
+    
+    const { data, error } = await supabase
+      .from("asset_units")
+      .select("unit, decimals");
+
+    if (error) {
+      context.response.status = 500;
+      context.response.body = { error: error.message };
+      return;
+    }
+
+    context.response.status = 200;
+    context.response.body = data;
   })
   .post("/v2/add_task", async (context) => {
     const supabase = createClient(
@@ -666,21 +725,67 @@ ${body}
           return;
         }
 
-        // Set solver to coupon issuer if coupon is valid
-        solver = couponData[0].issuer;
+      // Set solver to coupon issuer if coupon is valid
+      solver = couponData[0].issuer;
+      
+      // If fee/fee_unit not provided in request, use coupon's fee/fee_unit
+      if (!fee && couponData[0].fee) {
+        fee = couponData[0].fee;
+      }
+      if (!fee_unit && couponData[0].fee_unit) {
+        fee_unit = couponData[0].fee_unit;
+      }
+    }
+
+    // Get fee_unit decimals from asset_units table and format the fee
+    if (fee && fee_unit) {
+      const { data: assetUnits, error: assetUnitsError } = await supabase
+        .from("asset_units")
+        .select("decimals")
+        .eq("unit", fee_unit);
+
+      if (assetUnitsError) {
+        context.response.status = 500;
+        context.response.body = { error: assetUnitsError.message };
+        return;
       }
 
-      // Build insert data object
-      const insertData: Record<string, any> = {
-        user,
-        prompt,
-        task_type,
-      };
+      if (!assetUnits || assetUnits.length === 0) {
+        context.response.status = 400;
+        context.response.body = { error: `Fee unit "${fee_unit}" not found in asset_units table` };
+        return;
+      }
 
-      if (solver) insertData.solver = solver;
-      if (coupon) insertData.coupon = coupon;
-      if (fee) insertData.fee = fee;
-      if (fee_unit) insertData.fee_unit = fee_unit;
+      const decimals = assetUnits[0].decimals;
+      
+      // Convert fee to integer format for storage based on decimals
+      // For example: fee=10 with decimals=6 → 10 * 10^6 = 10000000
+      //              fee=1.5 with decimals=6 → 1.5 * 10^6 = 1500000
+      const feeString = typeof fee === "string" ? fee : fee.toString();
+      const feeNumber = parseFloat(feeString);
+      
+      if (isNaN(feeNumber)) {
+        context.response.status = 400;
+        context.response.body = { error: "Invalid fee format: fee must be a valid number" };
+        return;
+      }
+      
+      // Always convert to integer by multiplying by 10^decimals
+      const feeInteger = Math.floor(feeNumber * Math.pow(10, decimals));
+      fee = feeInteger.toString();
+    }
+
+    // Build insert data object
+    const insertData: Record<string, any> = {
+      user,
+      prompt,
+      task_type,
+    };
+
+    if (solver) insertData.solver = solver;
+    if (coupon) insertData.coupon = coupon;
+    if (fee) insertData.fee = fee;
+    if (fee_unit) insertData.fee_unit = fee_unit;
 
       // Insert new task
       const { data, error } = await supabase
@@ -1274,7 +1379,7 @@ ${body}
       context.response.body = { error: "Internal server error" };
     }
   })
-  .post("/v2/generate_coupon", async (context) => {
+  .post("/v2/dev/generate_coupon", async (context) => {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL_2") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY_2") ?? ""
@@ -1282,7 +1387,7 @@ ${body}
 
     // Parse the request body
     let payload = await context.request.body.text();
-    const { password, issuer, price, price_unit } = JSON.parse(payload);
+    const { password, issuer, fee, fee_unit } = JSON.parse(payload);
 
     // Verify admin password
     if (!(await verifyAdminPassword(context, password))) {
@@ -1303,9 +1408,27 @@ ${body}
 
       // Add optional fields if provided
       if (issuer) insertData.issuer = issuer;
-      if (price) insertData.price = price;
-      if (price_unit) insertData.price_unit = price_unit;
-
+      if (fee) insertData.fee = fee;
+      if (fee_unit) insertData.fee_unit = fee_unit;
+      
+      // format the fee to the decimals of the fee_unit
+      let fee_format: string | null = null;
+      if (fee && fee_unit) {
+        // get fee_unit from asset_units
+        const { data: assetUnits, error: assetUnitsError } = await supabase
+          .from("asset_units")
+          .select("decimals")
+          .eq("unit", fee_unit);
+        if (assetUnitsError) {
+          console.error("Failed to get asset units:", assetUnitsError);
+          context.response.status = 500;
+          context.response.body = { error: "Failed to get asset units" };
+          return;
+        }
+        if (assetUnits && assetUnits.length > 0) {
+          fee_format = formatIntegerAmount(fee, assetUnits[0].decimals);
+        }
+      }
       // Insert the coupon into the database
       const { data, error } = await supabase
         .from("micro_ai_saas_coupons")
@@ -1325,8 +1448,9 @@ ${body}
         coupon: address,
         privateKey: privateKey,
         createdAt: data[0].created_at,
-        price: data[0].price,
-        price_unit: data[0].price_unit,
+        fee: data[0].fee,
+        fee_format: fee_format,
+        fee_unit: data[0].fee_unit,
         issuer: data[0].issuer,
       };
     } catch (err) {
@@ -1334,6 +1458,63 @@ ${body}
       context.response.status = 500;
       context.response.body = { error: "Failed to generate coupon" };
     }
+  })
+  .post("/v2/check_coupon", async (context) => {
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL_2") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY_2") ?? ""
+    );
+    
+    let payload = await context.request.body.text();
+    const { coupon } = JSON.parse(payload);
+
+    const { data: couponData, error: couponError } = await supabase
+      .from("micro_ai_saas_coupons")
+      .select("*, asset_units!fee_unit(decimals), micro_ai_saas_agents!issuer(*)")
+      .eq("addr", coupon);
+
+      // todo: handle the fee to add a fee_format field to the response
+
+      if (couponError) {
+        context.response.status = 500;
+        context.response.body = { error: couponError.message };
+        return;
+      }
+      
+      if (!couponData || couponData.length === 0) {
+        context.response.status = 400;
+        context.response.body = { error: "Coupon not found" };
+        return;
+      }
+
+      if (couponData[0].if_used) {
+        context.response.status = 400;
+        context.response.body = { error: "Coupon has been used" };
+        return;
+      }
+
+      // Remove private key from response
+      const { priv, ...couponResponse } = couponData[0];
+      // Format the fee using decimals from asset_units
+      if (couponResponse.fee !== null) {
+        if (couponResponse.asset_units && couponResponse.asset_units.decimals !== undefined) {
+          const decimals = couponResponse.asset_units.decimals;
+          const priceValue = typeof couponResponse.fee === "string" 
+            ? parseInt(couponResponse.fee, 10) 
+            : Math.floor(Number(couponResponse.fee));
+          if (!isNaN(priceValue)) {
+            couponResponse.fee_format = formatIntegerAmount(priceValue, decimals);
+          } else {
+            couponResponse.fee_format = couponResponse.price;
+          }
+        } else {
+          // If no decimals available, use price as-is
+          couponResponse.fee_format = couponResponse.price;
+        }
+      }
+
+      context.response.status = 200;
+      context.response.body = couponResponse;
   })
   .get("/tasks", async (context) => {
     const supabase = createClient(

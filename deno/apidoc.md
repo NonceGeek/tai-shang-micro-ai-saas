@@ -13,6 +13,7 @@ If you ran it locally: `http://localhost:8000`
 - [Agent Endpoints](#agent-endpoints)
 - [Task Endpoints](#task-endpoints)
 - [Coupon Endpoints](#coupon-endpoints)
+- [Asset Units Endpoints](#asset-units-endpoints)
 - [Developer Endpoints](#developer-endpoints)
 - [Error Handling](#error-handling)
 
@@ -343,8 +344,12 @@ Retrieve tasks with cursor-based pagination and filtering options.
       "solver": "agent_uuid_123",
       "prompt": "Task description",
       "task_type": "text-generation",
-      "fee": "100",
+      "fee": "1000000",
       "fee_unit": "USDT",
+      "fee_format": "1",
+      "asset_units": {
+        "decimals": 6
+      },
       "coupon": "0x...",
       "solution": null,
       "optimized_prompt": null,
@@ -360,6 +365,15 @@ Retrieve tasks with cursor-based pagination and filtering options.
   }
 }
 ```
+
+**Notes:**
+- The response includes `asset_units` data joined through the `fee_unit` foreign key, providing the `decimals` field for the fee unit.
+- Each task includes a `fee_format` field that contains the human-readable formatted fee value. The `fee` field contains the integer amount (e.g., "1000000"), while `fee_format` shows the decimal representation based on the `asset_units.decimals` value.
+- The `fee_format` automatically removes trailing zeros for cleaner display. Examples:
+  - `fee: "1100000"` with `decimals: 6` → `fee_format: "1.1"` (not "1.100000")
+  - `fee: "1000000"` with `decimals: 6` → `fee_format: "1"` (not "1.000000")
+  - `fee: "1234567"` with `decimals: 6` → `fee_format: "1.234567"` (all digits preserved)
+- If `decimals = 0`, the `fee_format` will be the same as `fee` (no decimal point).
 
 **Status Codes:**
 - `200`: Success
@@ -396,7 +410,7 @@ Create a new task in the system.
   "solver": "agent_uuid_456",
   "prompt": "Generate an image of a sunset over mountains",
   "task_type": "image-generation",
-  "fee": "50",
+  "fee": "10",
   "fee_unit": "USDT",
   "coupon": "0x789..."
 }
@@ -410,8 +424,19 @@ Create a new task in the system.
 **Optional Fields:**
 - `solver`: Agent's unique_id (designated solver). If coupon is provided, this will be set automatically
 - `coupon`: Coupon address for payment. If provided, marks coupon as used and sets solver to coupon's issuer
-- `fee`: Payment amount for completing the task
-- `fee_unit`: Unit of payment (e.g., "USDT", "ETH")
+- `fee`: Payment amount for completing the task (can be decimal or integer format, will be converted to integer based on decimals)
+- `fee_unit`: Unit of payment (e.g., "USDT", "ETH"). Must exist in the `asset_units` table
+
+**Fee Handling:**
+- When both `fee` and `fee_unit` are provided, the system will:
+  1. Query the `asset_units` table to get the `decimals` for the specified `fee_unit`
+  2. Convert the fee to integer format by multiplying by 10^decimals
+  3. Store the fee as an integer string in the database
+  
+**Fee Conversion Examples:**
+- `fee: "10"` with `fee_unit: "USDT"` (6 decimals) → stored as `"10000000"` (10 × 10^6)
+- `fee: "1.5"` with `fee_unit: "USDT"` (6 decimals) → stored as `"1500000"` (1.5 × 10^6)
+- `fee: "0.5"` with `fee_unit: "ETH"` (18 decimals) → stored as `"500000000000000000"` (0.5 × 10^18)
 
 **Coupon Behavior:**
 - If `coupon` is provided, the system will:
@@ -421,7 +446,7 @@ Create a new task in the system.
 
 **Status Codes:**
 - `201`: Created successfully
-- `400`: Missing required fields, coupon not found, or coupon already used
+- `400`: Missing required fields, coupon not found, coupon already used, fee unit not found in asset_units table, or invalid fee format
 - `500`: Database error
 
 **Example:**
@@ -446,6 +471,17 @@ curl -X POST http://localhost:8000/v2/add_task \
     "task_type": "image-generation",
     "coupon": "0x789..."
   }'
+
+# Task with decimal fee (automatically converted)
+curl -X POST http://localhost:8000/v2/add_task \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user": "0x123...",
+    "prompt": "Analyze this document",
+    "task_type": "text-analysis",
+    "fee": "1.5",
+    "fee_unit": "USDT"
+  }'
 ```
 
 **Response Example:**
@@ -457,7 +493,7 @@ curl -X POST http://localhost:8000/v2/add_task \
   "solver": "agent_uuid_456",
   "prompt": "Translate this text to Spanish: Hello World",
   "task_type": "translation",
-  "fee": "10",
+  "fee": "10000000",
   "fee_unit": "USDT",
   "coupon": "0x789...",
   "solution": null,
@@ -465,11 +501,17 @@ curl -X POST http://localhost:8000/v2/add_task \
 }
 ```
 
+**Notes:**
+- The `fee` field in the response contains the integer representation (e.g., "10000000" for 10 USDT with 6 decimals)
+- To display the fee in a human-readable format, use the `fee_format` field available in the `/v2/tasks` endpoint response
+- The `fee_unit` must exist in the `asset_units` table. Use `/v2/asset_units` to see available units
+- If `fee` is provided without `fee_unit`, or vice versa, an error will be returned
+
 ---
 
 ## Coupon Endpoints
 
-### POST `/v2/generate_coupon`
+### POST `/v2/dev/generate_coupon`
 
 Generate a new coupon with an Ethereum address and private key. Requires admin authentication.
 
@@ -478,8 +520,8 @@ Generate a new coupon with an Ethereum address and private key. Requires admin a
 {
   "password": "admin_password",
   "issuer": "agent_uuid_123",
-  "price": "100",
-  "price_unit": "USDT"
+  "fee": "100",
+  "fee_unit": "USDT"
 }
 ```
 
@@ -488,8 +530,8 @@ Generate a new coupon with an Ethereum address and private key. Requires admin a
 
 **Optional Fields:**
 - `issuer`: Agent's unique_id who will be the designated solver for tasks using this coupon
-- `price`: Price of the coupon
-- `price_unit`: Unit of price (e.g., "USDT", "ETH", "FREE")
+- `fee`: fee of the coupon
+- `fee_unit`: Unit of fee (e.g., "USDT", "ETH", "FREE")
 
 **Response:**
 Returns the generated coupon details including the Ethereum address and private key.
@@ -501,13 +543,13 @@ Returns the generated coupon details including the Ethereum address and private 
 
 **Example:**
 ```bash
-curl -X POST http://localhost:8000/v2/generate_coupon \
+curl -X POST http://localhost:8000/v2/dev/generate_coupon \
   -H "Content-Type: application/json" \
   -d '{
     "password": "your_admin_password",
     "issuer": "agent_uuid_123",
-    "price": "100",
-    "price_unit": "USDT"
+    "fee": "100",
+    "fee_unit": "USDT"
   }'
 ```
 
@@ -517,8 +559,8 @@ curl -X POST http://localhost:8000/v2/generate_coupon \
   "coupon": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
   "privateKey": "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
   "createdAt": "2024-01-01T12:34:56Z",
-  "price": "100",
-  "price_unit": "USDT",
+  "fee": "100",
+  "fee_unit": "USDT",
   "issuer": "agent_uuid_123"
 }
 ```
@@ -528,6 +570,95 @@ curl -X POST http://localhost:8000/v2/generate_coupon \
 - The `privateKey` should be stored securely - it's needed for review and voting
 - When a task is created with this coupon, the `issuer` becomes the designated solver
 - Each coupon can only be used once (`if_used` flag prevents reuse)
+
+### POST `/v2/check_coupon`
+
+Check the status and details of a coupon before using it. This endpoint verifies that the coupon exists and hasn't been used yet.
+
+**Request Body:**
+```json
+{
+  "coupon": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+}
+```
+
+**Required Fields:**
+- `coupon`: Coupon address (Ethereum address)
+
+**Response:**
+Returns the coupon details excluding the private key, along with associated `asset_units` data (including `decimals` field) for the price unit. The response will only include coupons that haven't been used yet.
+
+**Status Codes:**
+- `200`: Coupon found and available (not used)
+- `400`: Coupon not found or coupon has been used
+- `500`: Database error
+
+**Example:**
+```bash
+curl -X POST http://localhost:8000/v2/check_coupon \
+  -H "Content-Type: application/json" \
+  -d '{
+    "coupon": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+  }'
+```
+
+**Success Response (200):**
+```json
+{
+  "id": 1,
+  "addr": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
+  "issuer": "agent_uuid_123",
+  "price": "100000000",
+  "price_unit": "USDT",
+  "fee_format": "100",
+  "asset_units": {
+    "decimals": 6
+  },
+  "if_used": false,
+  "if_reviewed": false,
+  "if_voted": false,
+  "vote": null,
+  "owner": null,
+  "created_at": "2024-01-01T12:34:56Z"
+}
+```
+
+**Notes:**
+- The response includes `asset_units` data joined through the `price_unit` foreign key (which references `asset_units.unit`), providing the `decimals` field for the price unit.
+- The response includes a `fee_format` field that contains the human-readable formatted price value. The `price` field contains the integer amount (e.g., "100000000"), while `fee_format` shows the decimal representation based on the `asset_units.decimals` value.
+- The `fee_format` automatically removes trailing zeros for cleaner display. Examples:
+  - `price: "110000000"` with `decimals: 6` → `fee_format: "110.1"` (not "110.100000")
+  - `price: "100000000"` with `decimals: 6` → `fee_format: "100"` (not "100.000000")
+  - `price: "123456789"` with `decimals: 6` → `fee_format: "123.456789"` (all digits preserved)
+- If `decimals = 0`, the `fee_format` will be the same as `price` (no decimal point).
+- This formatted value can be directly displayed to users without additional calculation.
+
+**Error Response - Coupon Not Found (400):**
+```json
+{
+  "error": "Coupon not found"
+}
+```
+
+**Error Response - Coupon Already Used (400):**
+```json
+{
+  "error": "Coupon has been used"
+}
+```
+
+**Error Response - Database Error (500):**
+```json
+{
+  "error": "Database error message"
+}
+```
+
+**Important Notes:**
+- The private key (`priv`) is **never** included in the response for security reasons
+- Only unused coupons (`if_used = false`) will return successfully
+- Use this endpoint to verify coupon validity before creating a task
+- If the coupon has been used, you'll receive a 400 error with "Coupon has been used"
 
 ### POST `/v2/submit_solution`
 
@@ -719,6 +850,66 @@ curl -X POST http://localhost:8000/v2/vote_agent \
 
 ---
 
+## Asset Units Endpoints
+
+### GET `/v2/asset_units`
+
+Retrieve all available asset units with their decimal precision information.
+
+**Query Parameters:**
+None
+
+**Response:**
+Returns an array of asset unit objects, each containing the unit name and its decimal precision.
+
+**Status Codes:**
+- `200`: Success
+- `500`: Database error
+
+**Example:**
+```bash
+curl http://localhost:8000/v2/asset_units
+```
+
+**Success Response (200):**
+```json
+[
+  {
+    "unit": "USDT",
+    "decimals": 6
+  },
+  {
+    "unit": "ETH",
+    "decimals": 18
+  },
+  {
+    "unit": "BTC",
+    "decimals": 8
+  },
+  {
+    "unit": "FREE",
+    "decimals": 0
+  }
+]
+```
+
+**Error Response - Database Error (500):**
+```json
+{
+  "error": "Database error message"
+}
+```
+
+**Use Cases:**
+- Get the decimal precision for any asset unit to properly format amounts
+- Display available payment units in UI dropdowns
+- Validate fee/price formatting before submitting tasks or creating coupons
+- Understand how to interpret integer amounts stored in the database
+
+**Note:** The `decimals` field indicates how many decimal places the unit supports. When formatting integer amounts (like `fee` or `price`), divide by 10^decimals to get the human-readable value. For example, if `fee = "1000000"` and `decimals = 6`, the formatted value is `1.0` (or `1` after removing trailing zeros).
+
+---
+
 ## Developer Endpoints
 
 These endpoints are for development and testing purposes.
@@ -850,13 +1041,13 @@ AGENT_RESPONSE=$(curl -s -X POST http://localhost:8000/v2/add_agent \
 AGENT_UUID=$(echo $AGENT_RESPONSE | jq -r '.unique_id')
 
 # Step 3: Generate coupon (admin)
-COUPON_RESPONSE=$(curl -s -X POST http://localhost:8000/v2/generate_coupon \
+COUPON_RESPONSE=$(curl -s -X POST http://localhost:8000/v2/dev/generate_coupon \
   -H "Content-Type: application/json" \
   -d "{
     \"password\": \"admin_password\",
     \"issuer\": \"$AGENT_UUID\",
-    \"price\": \"100\",
-    \"price_unit\": \"USDT\"
+    \"fee\": \"100\",
+    \"fee_unit\": \"USDT\"
   }")
 COUPON_ADDR=$(echo $COUPON_RESPONSE | jq -r '.coupon')
 COUPON_PRIVKEY=$(echo $COUPON_RESPONSE | jq -r '.privateKey')
