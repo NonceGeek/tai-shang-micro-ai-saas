@@ -1077,6 +1077,226 @@ ${body}
       context.response.body = { error: "Internal server error" };
     }
   })
+  .post("/v2/dev/submit_solution", async (context) => {
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL_2") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY_2") ?? ""
+    );
+
+    // Parse the request body
+    let payload = await context.request.body.text();
+    const {
+      unique_id,
+      solution,
+      optimized_prompt,
+      solver,
+      solver_type,
+      signature,
+      password,
+    } = JSON.parse(payload);
+
+    // Validate required fields
+    if (!unique_id || !solution || !solver) {
+      context.response.status = 400;
+      context.response.body = {
+        error:
+          "Missing required fields: unique_id, solution, and solver are required",
+      };
+      return;
+    }
+
+    // Check if admin password is provided for bypassing signature verification
+    let isAdmin = false;
+    if (password) {
+      const adminPwd = Deno.env.get("ADMIN_PWD");
+      if (password === adminPwd) {
+        isAdmin = true;
+      } else {
+        context.response.status = 401;
+        context.response.body = { error: "Unauthorized: Invalid password" };
+        return;
+      }
+    }
+
+    try {
+      // Fetch the task
+      const { data: tasks, error: selectError } = await supabase
+        .from("micro_ai_saas")
+        .select("*")
+        .eq("unique_id", unique_id);
+
+      if (selectError) {
+        console.error("Database error:", selectError);
+        context.response.status = 500;
+        context.response.body = { error: "Database query failed" };
+        return;
+      }
+
+      if (!tasks || tasks.length === 0) {
+        context.response.status = 404;
+        context.response.body = { error: "Task not found" };
+        return;
+      }
+
+      const task = tasks[0];
+
+      // Generate message for signature verification
+      const message = await sha256(task.prompt + task.unique_id);
+
+      // Case 2: Task already has a solution
+      if (task.solution) {
+        context.response.status = 400;
+        context.response.body = {
+          error: "Task already has a solution",
+          existingSolution: {
+            solver: task.solver,
+            solvedAt: task.solved_at,
+          },
+        };
+        return;
+      }
+
+      // Case 3: Task has a designated solver - verify signature (skip if admin password provided)
+      if (task.solver && !isAdmin) {
+        // Signature verification required
+        if (!signature) {
+          context.response.status = 400;
+          context.response.body = {
+            error: "Signature is required when task has a designated solver",
+            expectedMessage: message,
+            hint: "Sign the message (SHA256 hash of prompt + unique_id) with your private key, or provide admin password to bypass",
+          };
+          return;
+        }
+
+        try {
+          // Verify the signature
+          const recoveredAddress = verifyMessage(message, signature);
+          // task.solver is the uuid of the agent, get the agent from the database
+          const { data: agents, error: agentSelectError } = await supabase
+            .from("micro_ai_saas_agents")
+            .select("*")
+            .eq("unique_id", task.solver);
+          if (agentSelectError) {
+            context.response.status = 500;
+            context.response.body = { error: agentSelectError.message };
+            return;
+          }
+          if (!agents || agents.length === 0) {
+            context.response.status = 404;
+            context.response.body = { error: "Agent not found" };
+            return;
+          }
+          const agent = agents[0];
+          // Check if recovered address matches the designated solver
+          if (recoveredAddress.toLowerCase() !== agent.addr.toLowerCase()) {
+            context.response.status = 403;
+            context.response.body = {
+              error:
+                "Signature verification failed: You are not the designated solver",
+              designatedSolver: task.solver,
+              yourAddress: recoveredAddress,
+            };
+            return;
+          }
+
+          // Also check if the solver matches
+          if (solver !== task.solver) {
+            context.response.status = 403;
+            context.response.body = {
+              error: "solver does not match the designated solver",
+              designatedSolver: task.solver,
+            };
+            return;
+          }
+        } catch (err) {
+          console.error("Signature verification error:", err);
+          context.response.status = 400;
+          context.response.body = {
+            error: "Invalid signature format or verification failed",
+          };
+          return;
+        }
+      }
+
+      // Case 1: Task has no solution and no designated solver - anyone can solve
+      // Case 3 (passed verification): Designated solver with valid signature
+      // Update the task with the solution
+      const updateData: Record<string, any> = {
+        solution,
+        solver: task.solver || solver, // Use existing solver or set new one
+        solved_at: new Date().toISOString(),
+        optimized_prompt: optimized_prompt,
+      };
+
+      if (solver_type) {
+        updateData.solver_type = solver_type;
+      }
+
+      const { data, error: updateError } = await supabase
+        .from("micro_ai_saas")
+        .update(updateData)
+        .eq("unique_id", unique_id)
+        .select();
+
+      if (updateError) {
+        console.error("Database error:", updateError);
+        context.response.status = 500;
+        context.response.body = { error: "Failed to update task" };
+        return;
+      }
+
+      // Update agent solve_times counter
+      const finalSolver = task.solver || solver;
+      if (finalSolver) {
+        const { data: agents, error: agentSelectError } = await supabase
+          .from("micro_ai_saas_agents")
+          .select("solve_times")
+          .eq("unique_id", finalSolver);
+
+        if (!agentSelectError && agents && agents.length > 0) {
+          const currentSolveTimes = agents[0].solve_times || 0;
+          const { error: agentUpdateError } = await supabase
+            .from("micro_ai_saas_agents")
+            .update({ solve_times: currentSolveTimes + 1 })
+            .eq("unique_id", finalSolver);
+
+          if (agentUpdateError) {
+            console.error(
+              "Failed to update agent solve_times:",
+              agentUpdateError
+            );
+            // Continue anyway - solution is already recorded
+          }
+        }
+      }
+
+      // Update coupon if task has one
+
+      if (task.coupon) {
+        const { error: couponError } = await supabase
+          .from("micro_ai_saas_coupons")
+          .update({ if_used: true, owner: solver })
+          .eq("addr", task.coupon);
+
+        if (couponError) {
+          console.error("Failed to update coupon:", couponError);
+          // Note: We don't fail the request if coupon update fails
+          // as the solution is already recorded
+        }
+      }
+
+      context.response.status = 200;
+      context.response.body = {
+        success: true,
+        task: data[0],
+      };
+    } catch (err) {
+      console.error("Unexpected error:", err);
+      context.response.status = 500;
+      context.response.body = { error: "Internal server error" };
+    }
+  })
   .post("/v2/vote_agent", async (context) => {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL_2") ?? "",
