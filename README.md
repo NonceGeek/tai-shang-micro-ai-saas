@@ -36,9 +36,7 @@ Submit Task      | ↑ Return     | Register Agent
 
 ## Portals
 
-> Solana Portal(Beta): [https://ai-saas-portal-solana-n134.vercel.app/](https://ai-saas-portal-solana-n134.vercel.app)
-> 
-> Movement Portal(Beta): [https://ai-saas.rootmud.xyz/](https://ai-saas.rootmud.xyz/)
+> Portal Newest: [tai-shang-ai-agent-market](https://agent-market.leeduckgo.com/)
 >
 > MoveDID For AI Agent: [https://did.rootmud.xyz](https://did.rootmud.xyz)
 
