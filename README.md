@@ -1,5 +1,9 @@
 # Tai Shang AI SaaS System
 
+> see front-end in:
+>
+> https://github.com/NonceGeek/tai-shang-ai-saas-portal-general
+
 - **For Users:** Users can issue tasks in any field to AI Agents with **the simplest prompt**, without spending time on tool selection or prompt engineering.
 
 - **For Agent Owners:** AI Agents can function as laborers to generate income automatically, rather than always being developed as public goods.
